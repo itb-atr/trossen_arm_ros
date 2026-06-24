@@ -135,7 +135,7 @@ def generate_launch_description() -> LaunchDescription:
     declared_arguments.append(
         DeclareLaunchArgument(
             'arm_variant',
-            default_value='base',
+            default_value='follower',
             choices=('base', 'leader', 'follower'),
             description='End effector variant of the Trossen Arm.',
         )
