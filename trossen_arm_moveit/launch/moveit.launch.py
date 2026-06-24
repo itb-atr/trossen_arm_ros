@@ -77,6 +77,7 @@ def launch_setup(context, *args, **kwargs):
             publish_state_updates=True,
             publish_transforms_updates=True,
             publish_planning_scene=True,
+            publish_robot_description_semantic=True
         )
         .trajectory_execution(
             file_path='config/moveit_controllers.yaml',
@@ -167,6 +168,25 @@ def launch_setup(context, *args, **kwargs):
                 executable='spawner',
                 arguments=[
                     controller_name,
+                ],
+                output={'both': 'screen'},
+            )
+        )
+
+    for controller_name in [
+        'gravity_compensation_controller',
+        'gripper_external_effort_controller',
+    ]:
+        controller_spawner_nodes.append(
+            Node(
+                name=f'{controller_name}_spawner',
+                package='controller_manager',
+                executable='spawner',
+                arguments=[
+                    controller_name,
+                    '--controller-manager',
+                    '/controller_manager',
+                    '--inactive',
                 ],
                 output={'both': 'screen'},
             )

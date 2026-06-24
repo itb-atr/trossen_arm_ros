@@ -49,6 +49,14 @@
         <joint name="joint_4" value="0"/>
         <joint name="joint_5" value="0"/>
     </group_state>
+    <group_state name="observation" group="arm">
+        <joint name="joint_0" value="0.0036240178160369396"/>
+        <joint name="joint_1" value="0.4888609051704407"/>  <!-- pi / 3-->
+        <joint name="joint_2" value="1.425764799118042"/>  <!-- pi / 6-->
+        <joint name="joint_3" value="-1.342984676361084"/>  <!-- pi / 5-->
+        <joint name="joint_4" value="-0.0020981156267225742"/>
+        <joint name="joint_5" value="0.002479590941220522"/>
+    </group_state>
     <group_state name="close" group="gripper">
         <joint name="left_carriage_joint" value="0.0"/>
         <joint name="right_carriage_joint" value="0.0"/>
