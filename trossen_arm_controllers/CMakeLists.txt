@@ -9,11 +9,11 @@ find_package(rclcpp REQUIRED)
 find_package(trossen_arm_hardware REQUIRED)
 
 set(ROS_DEPENDENCIES
-  controller_interface
-  hardware_interface
-  pluginlib
-  rclcpp
-  trossen_arm_hardware
+  controller_interface::controller_interface
+  hardware_interface::hardware_interface
+  pluginlib::pluginlib
+  rclcpp::rclcpp
+  trossen_arm_hardware::trossen_arm_hardware
 )
 
 include_directories(
@@ -24,7 +24,7 @@ add_library(${PROJECT_NAME} SHARED
   src/gravity_compensation.cpp
 )
 
-ament_target_dependencies(${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME} PUBLIC
   ${ROS_DEPENDENCIES}
 )
 
