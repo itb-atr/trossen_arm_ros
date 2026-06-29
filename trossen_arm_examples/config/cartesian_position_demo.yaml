@@ -1,0 +1,16 @@
+cartesian_position_demo:
+  ros__parameters:
+    command_topic: /cartesian_position_controller/command
+    auto_activate_controller: true
+    controller_manager_name: /controller_manager
+    controller_name: cartesian_position_controller
+    deactivate_controller_name: cartesian_external_effort_controller
+    start_pose: [0.25, 0.0, 0.35, 0.0, 0.0, 0.0]
+    base_frame_step: [0.02, 0.0, 0.0, 0.0, 0.0, 0.0]
+    step_count: 5
+    return_pose: [0.25, 0.0, 0.35, 0.0, 0.0, 0.0]
+    publish_delay_sec: 0.5
+    start_settle_sec: 2.0
+    step_settle_sec: 1.0
+    return_wait_sec: 5.0
+    return_settle_sec: 2.0

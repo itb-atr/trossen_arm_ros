@@ -1,0 +1,28 @@
+cartesian_button_press_demo:
+  ros__parameters:
+    position_command_topic: /cartesian_position_controller/command
+    effort_command_topic: /cartesian_external_effort_controller/command
+    auto_activate_controllers: true
+    controller_manager_name: /controller_manager
+    position_controller_name: cartesian_position_controller
+    effort_controller_name: cartesian_external_effort_controller
+    state_topic: /dynamic_joint_states
+    cartesian_state_name: cartesian
+    start_pose: [0.25, 0.0, 0.35, 0.0, 0.0, 0.0]
+    press_direction: [1.0, 0.0, 0.0]
+    press_force_n: 4.0
+    torque_xyz_nm: [0.0, 0.0, 0.0]
+    max_press_travel_m: 0.1
+    press_duration_sec: 10.0
+    press_rate_hz: 100.0
+    stiffness: [120.0, 120.0, 120.0, 8.0, 8.0, 8.0]
+    damping: [3.0, 3.0, 3.0, 0.25, 0.25, 0.25]
+    ramp_time_sec: 0.5
+    max_force_norm_n: 8.0
+    max_torque_norm_nm: 1.0
+    return_pose: [0.25, 0.0, 0.35, 0.0, 0.0, 0.0]
+    start_settle_sec: 2.0
+    return_settle_sec: 5.0
+    return_rate_hz: 10.0
+    zero_wrench_count: 10
+    zero_wrench_dt_sec: 0.05

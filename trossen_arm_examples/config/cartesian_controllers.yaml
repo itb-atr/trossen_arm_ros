@@ -1,0 +1,24 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 100
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    cartesian_position_controller:
+      type: trossen_arm_controllers/CartesianPositionController
+
+    cartesian_external_effort_controller:
+      type: trossen_arm_controllers/CartesianExternalEffortController
+
+cartesian_position_controller:
+  ros__parameters:
+    cartesian_interface_name: cartesian
+    interpolation_space: cartesian
+    goal_time: 2.0
+
+cartesian_external_effort_controller:
+  ros__parameters:
+    cartesian_interface_name: cartesian
+    interpolation_space: cartesian
+    goal_time: 0.0

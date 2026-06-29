@@ -1,0 +1,38 @@
+cartesian_position_demo:
+  ros__parameters:
+    controller_name: cartesian_position_controller
+    controller_manager_name: /controller_manager
+    auto_activate_controller: false
+    service_timeout_sec: 5.0
+    subscriber_timeout_sec: 5.0
+
+    # Command sent to /cartesian_position_controller/command.
+    # Format: [x, y, z, rx, ry, rz]
+    pose: [0.35, 0.0, 0.22, 0.0, 0.0, 0.0]
+
+cartesian_button_press_demo:
+  ros__parameters:
+    position_controller_name: cartesian_position_controller
+    effort_controller_name: cartesian_external_effort_controller
+    controller_manager_name: /controller_manager
+    auto_activate_controllers: false
+    service_timeout_sec: 5.0
+    subscriber_timeout_sec: 5.0
+
+    # The approach/retract pose commands are optional. Disable them if another
+    # node, MoveIt, or a teach procedure is responsible for positioning the arm.
+    use_approach_pose: true
+    use_retract_pose: true
+
+    # Format: [x, y, z, rx, ry, rz]
+    approach_pose: [0.35, 0.0, 0.22, 0.0, 0.0, 0.0]
+    retract_pose: [0.35, 0.0, 0.26, 0.0, 0.0, 0.0]
+
+    # Format: [fx, fy, fz, tx, ty, tz]
+    # Start small. Confirm the sign convention on your setup before increasing.
+    press_wrench: [0.0, 0.0, -2.0, 0.0, 0.0, 0.0]
+    press_duration_sec: 1.0
+    zero_wrench_after_press: true
+
+    settle_time_sec: 2.5
+    retract_settle_time_sec: 2.0
