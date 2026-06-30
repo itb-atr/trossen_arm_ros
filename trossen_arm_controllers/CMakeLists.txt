@@ -8,6 +8,7 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(trossen_arm_hardware REQUIRED)
 
 set(ROS_DEPENDENCIES
@@ -18,6 +19,7 @@ set(ROS_DEPENDENCIES
   trossen_arm_hardware::trossen_arm_hardware
   realtime_tools::realtime_tools
   ${geometry_msgs_TARGETS}
+  ${std_srvs_TARGETS}
 )
 
 include_directories(
@@ -28,6 +30,7 @@ add_library(${PROJECT_NAME} SHARED
   src/gravity_compensation.cpp
   src/cartesian_position.cpp
   src/cartesian_external_effort.cpp
+  src/emergency_stop.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} PUBLIC

@@ -127,6 +127,13 @@ TrossenArmHardwareInterface::on_init(const hardware_interface::HardwareInfo & in
   cartesian_external_effort_command_id_ = 0.0;
   last_cartesian_external_effort_command_id_ = 0.0;
 
+  emergency_stop_engage_command_ = 0.0;
+  emergency_stop_release_command_ = 0.0;
+  emergency_stop_command_id_ = 0.0;
+  last_emergency_stop_command_id_ = 0.0;
+  emergency_stop_engaged_ = false;
+  normal_commands_suspended_after_emergency_stop_ = false;
+
   for (const auto & joint : info_.joints) {
     // Each joint has 3 command interfaces: position, velocity, external effort (in that order)
     // Expect exactly three command interfaces
@@ -332,6 +339,16 @@ TrossenArmHardwareInterface::export_command_interfaces()
     CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_COMMAND_ID,
     &cartesian_external_effort_command_id_);
 
+  command_interfaces.emplace_back(
+    EMERGENCY_STOP_COMPONENT_NAME, HW_IF_EMERGENCY_STOP_ENGAGE,
+    &emergency_stop_engage_command_);
+  command_interfaces.emplace_back(
+    EMERGENCY_STOP_COMPONENT_NAME, HW_IF_EMERGENCY_STOP_RELEASE,
+    &emergency_stop_release_command_);
+  command_interfaces.emplace_back(
+    EMERGENCY_STOP_COMPONENT_NAME, HW_IF_EMERGENCY_STOP_COMMAND_ID,
+    &emergency_stop_command_id_);
+
   return command_interfaces;
 }
 
@@ -429,6 +446,34 @@ TrossenArmHardwareInterface::write(
   }
 
   try {
+    if (is_new_command(emergency_stop_command_id_, last_emergency_stop_command_id_)) {
+      if (emergency_stop_engage_command_ > 0.5 && emergency_stop_release_command_ <= 0.5) {
+        const auto result = engage_emergency_stop();
+        if (result != return_type::OK) {
+          return result;
+        }
+      } else if (emergency_stop_release_command_ > 0.5 && emergency_stop_engage_command_ <= 0.5) {
+        const auto result = release_emergency_stop();
+        if (result != return_type::OK) {
+          return result;
+        }
+      } else {
+        RCLCPP_ERROR(get_logger(), "Invalid emergency stop command: exactly one of engage or release must be set.");
+        return return_type::ERROR;
+      }
+      last_emergency_stop_command_id_ = emergency_stop_command_id_;
+    }
+
+    if (emergency_stop_engaged_) {
+      std::fill(joint_external_effort_commands_.begin(), joint_external_effort_commands_.end(), 0.0);
+      arm_driver_->set_all_external_efforts(joint_external_effort_commands_, 0.0, false);
+      return return_type::OK;
+    }
+
+    if (normal_commands_suspended_after_emergency_stop_) {
+      return return_type::OK;
+    }
+
     if (arm_position_mode_running_) {
       arm_driver_->set_all_positions(joint_position_commands_, 0.0, false);
     } else if (arm_velocity_mode_running_) {
@@ -525,6 +570,11 @@ TrossenArmHardwareInterface::prepare_command_mode_switch(
     }
   }
 
+  if (requested_mode == HW_IF_EMERGENCY_STOP) {
+    RCLCPP_DEBUG(get_logger(), "Emergency stop controller command interfaces requested.");
+    return return_type::OK;
+  }
+
   if (requested_mode == HW_IF_VELOCITY) {
     RCLCPP_ERROR(get_logger(), "Velocity mode requested but not implemented.");
     return return_type::ERROR;
@@ -578,9 +628,19 @@ return_type TrossenArmHardwareInterface::perform_command_mode_switch(
   if (stop_modes.count(HW_IF_CARTESIAN_EXTERNAL_EFFORT)) {
     cartesian_external_effort_mode_running_ = false;
   }
+  if (stop_modes.count(HW_IF_EMERGENCY_STOP)) {
+    emergency_stop_controller_running_ = false;
+    }
 
   try {
+    if (start_modes.count(HW_IF_EMERGENCY_STOP)) {
+      emergency_stop_controller_running_ = true;
+      RCLCPP_INFO(get_logger(), "Emergency stop controller command interfaces active.");
+    }
+
+
     if (start_modes.count(HW_IF_POSITION)) {
+      normal_commands_suspended_after_emergency_stop_ = false;
       arm_position_mode_running_ = true;
       arm_velocity_mode_running_ = false;
       arm_external_effort_mode_running_ = false;
@@ -593,6 +653,7 @@ return_type TrossenArmHardwareInterface::perform_command_mode_switch(
       RCLCPP_ERROR(get_logger(), "Velocity mode requested but not implemented.");
       return return_type::ERROR;
     } else if (start_modes.count(HW_IF_EXTERNAL_EFFORT)) {
+      normal_commands_suspended_after_emergency_stop_ = false;
       arm_position_mode_running_ = false;
       arm_velocity_mode_running_ = false;
       arm_external_effort_mode_running_ = true;
@@ -602,6 +663,7 @@ return_type TrossenArmHardwareInterface::perform_command_mode_switch(
       arm_driver_->set_all_modes(trossen_arm::Mode::external_effort);
       RCLCPP_INFO(get_logger(), "Switched to external effort command mode.");
     } else if (start_modes.count(HW_IF_CARTESIAN_POSITION)) {
+      normal_commands_suspended_after_emergency_stop_ = false;
       arm_position_mode_running_ = false;
       arm_velocity_mode_running_ = false;
       arm_external_effort_mode_running_ = false;
@@ -612,6 +674,7 @@ return_type TrossenArmHardwareInterface::perform_command_mode_switch(
       arm_driver_->set_all_modes(trossen_arm::Mode::position);
       RCLCPP_INFO(get_logger(), "Switched to Cartesian position command mode.");
     } else if (start_modes.count(HW_IF_CARTESIAN_EXTERNAL_EFFORT)) {
+      normal_commands_suspended_after_emergency_stop_ = false;
       arm_position_mode_running_ = false;
       arm_velocity_mode_running_ = false;
       arm_external_effort_mode_running_ = false;
@@ -623,7 +686,7 @@ return_type TrossenArmHardwareInterface::perform_command_mode_switch(
       RCLCPP_INFO(get_logger(), "Switched to Cartesian external effort command mode.");
     }
 
-    if (start_modes.empty() &&
+    if (start_modes.empty() && !emergency_stop_engaged_ &&
       !arm_position_mode_running_ && !arm_velocity_mode_running_ &&
       !arm_external_effort_mode_running_ && !cartesian_position_mode_running_ &&
       !cartesian_external_effort_mode_running_)
@@ -649,6 +712,8 @@ TrossenArmHardwareInterface::on_deactivate(const rclcpp_lifecycle::State & /*pre
   arm_external_effort_mode_running_ = false;
   cartesian_position_mode_running_ = false;
   cartesian_external_effort_mode_running_ = false;
+  emergency_stop_controller_running_ = false;
+  normal_commands_suspended_after_emergency_stop_ = false;
 
   RCLCPP_INFO(get_logger(), "TrossenArmDriver disabled.");
   return CallbackReturn::SUCCESS;
@@ -658,8 +723,35 @@ CallbackReturn
 TrossenArmHardwareInterface::on_cleanup(const rclcpp_lifecycle::State & /*previous_state*/)
 {
   robot_output_ = trossen_arm::RobotOutput();
+  emergency_stop_engaged_ = false;
+  normal_commands_suspended_after_emergency_stop_ = false;
   arm_driver_.reset();
   return CallbackReturn::SUCCESS;
+}
+
+return_type
+TrossenArmHardwareInterface::engage_emergency_stop()
+{
+  std::fill(joint_external_effort_commands_.begin(), joint_external_effort_commands_.end(), 0.0);
+  arm_driver_->set_all_modes(trossen_arm::Mode::external_effort);
+  arm_driver_->set_all_external_efforts(joint_external_effort_commands_, 0.0, false);
+  emergency_stop_engaged_ = true;
+  normal_commands_suspended_after_emergency_stop_ = false;
+
+  RCLCPP_WARN(get_logger(), "Emergency stop engaged. Hardware commands from other controllers are ignored.");
+  return return_type::OK;
+}
+
+return_type
+TrossenArmHardwareInterface::release_emergency_stop()
+{
+  emergency_stop_engaged_ = false;
+  normal_commands_suspended_after_emergency_stop_ = true;
+
+  RCLCPP_WARN(
+    get_logger(),
+    "Emergency stop released. Motion commands remain suspended until a motion controller is restarted.");
+  return return_type::OK;
 }
 
 bool TrossenArmHardwareInterface::interface_type_in_stop(
@@ -691,6 +783,12 @@ std::string TrossenArmHardwareInterface::command_mode_from_interface_type(
 {
   if (type == HW_IF_POSITION || type == HW_IF_VELOCITY || type == HW_IF_EXTERNAL_EFFORT) {
     return type;
+  }
+
+  if (type == HW_IF_EMERGENCY_STOP_ENGAGE || type == HW_IF_EMERGENCY_STOP_RELEASE ||
+    type == HW_IF_EMERGENCY_STOP_COMMAND_ID)
+  {
+    return HW_IF_EMERGENCY_STOP;
   }
 
   if (has_prefix(type, HW_IF_CARTESIAN_POSITION_PREFIX)) {

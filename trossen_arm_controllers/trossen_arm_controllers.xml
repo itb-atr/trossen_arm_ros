@@ -25,4 +25,13 @@
       Controller for commanding Trossen Arm Cartesian tool-tip external forces and torques through ros2_control.
     </description>
   </class>
+
+  <class
+    name="trossen_arm_controllers/EmergencyStopController"
+    type="trossen_arm_controllers::EmergencyStopController"
+    base_class_type="controller_interface::ControllerInterface">
+    <description>
+      Controller for signaling emergency stop engage and release commands to the Trossen Arm hardware interface.
+    </description>
+  </class>
 </library>

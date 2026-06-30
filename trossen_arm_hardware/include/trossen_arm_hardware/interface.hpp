@@ -61,9 +61,11 @@ constexpr char END_EFFECTOR_LEADER[] = "leader";
 constexpr char HW_IF_EXTERNAL_EFFORT[] = "external_effort";
 
 constexpr char CARTESIAN_COMPONENT_NAME[] = "cartesian";
+constexpr char EMERGENCY_STOP_COMPONENT_NAME[] = "emergency_stop";
 
 constexpr char HW_IF_CARTESIAN_POSITION[] = "cartesian_position";
 constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT[] = "cartesian_external_effort";
+constexpr char HW_IF_EMERGENCY_STOP[] = "emergency_stop";
 
 constexpr char HW_IF_CARTESIAN_POSITION_PREFIX[] = "position.";
 constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_PREFIX[] = "external_effort.";
@@ -95,6 +97,11 @@ constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_GOAL_TIME[] = "external_effort.go
 constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_INTERPOLATION_SPACE[] =
   "external_effort.interpolation_space";
 constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_COMMAND_ID[] = "external_effort.command_id";
+
+constexpr char HW_IF_EMERGENCY_STOP_ENGAGE[] = "engage";
+constexpr char HW_IF_EMERGENCY_STOP_RELEASE[] = "release";
+constexpr char HW_IF_EMERGENCY_STOP_COMMAND_ID[] = "command_id";
+
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -194,6 +201,13 @@ protected:
   double cartesian_external_effort_command_id_{0.0};
   double last_cartesian_external_effort_command_id_{0.0};
 
+  double emergency_stop_engage_command_{0.0};
+  double emergency_stop_release_command_{0.0};
+  double emergency_stop_command_id_{0.0};
+  double last_emergency_stop_command_id_{0.0};
+  bool emergency_stop_engaged_{false};
+  bool normal_commands_suspended_after_emergency_stop_{false};
+
   // Flag to indicate the first read/write update
   bool first_update_{true};
 
@@ -212,10 +226,15 @@ protected:
   bool arm_external_effort_mode_running_{false};
   bool cartesian_position_mode_running_{false};
   bool cartesian_external_effort_mode_running_{false};
+  bool emergency_stop_controller_running_{false};
 
   bool gripper_position_mode_running_{false};
   bool gripper_velocity_mode_running_{false};
   bool gripper_effort_mode_running_{false};
+
+  return_type engage_emergency_stop();
+
+  return_type release_emergency_stop();
 
   // Logger
   rclcpp::Logger get_logger() const override;
