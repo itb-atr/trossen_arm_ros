@@ -17,7 +17,7 @@ set(ROS_DEPENDENCIES
   rclcpp::rclcpp
   trossen_arm_hardware::trossen_arm_hardware
   realtime_tools::realtime_tools
-  std_msgs::std_msgs
+  ${std_msgs_TARGETS}
 )
 
 include_directories(

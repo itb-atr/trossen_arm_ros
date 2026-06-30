@@ -15,6 +15,8 @@ set(ROS_DEPENDENCIES
   rclcpp_lifecycle
 )
 
+include_directories(include)
+
 add_library(${PROJECT_NAME} SHARED
   src/interface.cpp
 )
