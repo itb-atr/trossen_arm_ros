@@ -1,9 +1,9 @@
 import time
 
 from control_msgs.msg import DynamicJointState
+from geometry_msgs.msg import PoseStamped, WrenchStamped
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray
 
 from trossen_arm_examples.controller_manager_helpers import ControllerManagerClient
 from trossen_arm_examples.message_helpers import (
@@ -11,7 +11,8 @@ from trossen_arm_examples.message_helpers import (
     get_bool_parameter,
     get_float_array_parameter,
     get_string_parameter,
-    make_float64_array,
+    make_pose_stamped,
+    make_wrench_stamped,
 )
 
 
@@ -21,6 +22,8 @@ class CartesianButtonPressDemo(Node):
 
         declare_dynamic_parameter(self, 'position_command_topic', '/cartesian_position_controller/command')
         declare_dynamic_parameter(self, 'effort_command_topic', '/cartesian_external_effort_controller/command')
+        declare_dynamic_parameter(self, 'position_command_frame_id', 'base_link')
+        declare_dynamic_parameter(self, 'effort_command_frame_id', 'base_link')
         declare_dynamic_parameter(self, 'auto_activate_controllers', False)
         declare_dynamic_parameter(self, 'controller_manager_name', '/controller_manager')
         declare_dynamic_parameter(self, 'position_controller_name', 'cartesian_position_controller')
@@ -48,6 +51,8 @@ class CartesianButtonPressDemo(Node):
 
         self._position_topic = get_string_parameter(self, 'position_command_topic')
         self._effort_topic = get_string_parameter(self, 'effort_command_topic')
+        self._position_command_frame_id = get_string_parameter(self, 'position_command_frame_id')
+        self._effort_command_frame_id = get_string_parameter(self, 'effort_command_frame_id')
         self._state_topic = get_string_parameter(self, 'state_topic')
         self._cartesian_state_name = get_string_parameter(self, 'cartesian_state_name')
         self._start_pose = get_float_array_parameter(self, 'start_pose', 6)
@@ -98,8 +103,8 @@ class CartesianButtonPressDemo(Node):
         self._latest_cartesian_velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._press_stop_pose = None
 
-        self._position_pub = self.create_publisher(Float64MultiArray, self._position_topic, 10)
-        self._effort_pub = self.create_publisher(Float64MultiArray, self._effort_topic, 10)
+        self._position_pub = self.create_publisher(PoseStamped, self._position_topic, 10)
+        self._effort_pub = self.create_publisher(WrenchStamped, self._effort_topic, 10)
         self._state_sub = self.create_subscription(
             DynamicJointState,
             self._state_topic,
@@ -133,7 +138,9 @@ class CartesianButtonPressDemo(Node):
             'Driving to start pose before applying external effort: '
             f'{self._format_values(self._start_pose)}'
         )
-        self._position_pub.publish(make_float64_array(self._start_pose))
+        self._position_pub.publish(
+            make_pose_stamped(self, self._start_pose, self._position_command_frame_id)
+        )
         self._sleep_with_spin(self._start_settle_sec)
         self.get_logger().info('Reached external-effort start pose.')
 
@@ -220,7 +227,9 @@ class CartesianButtonPressDemo(Node):
                 current_velocity=current_velocity,
                 elapsed=elapsed,
             )
-            self._effort_pub.publish(make_float64_array(effort))
+            self._effort_pub.publish(
+                make_wrench_stamped(self, effort, self._effort_command_frame_id)
+            )
             self._sleep_with_spin(dt)
 
     def _compute_impedance_press_effort(
@@ -255,7 +264,9 @@ class CartesianButtonPressDemo(Node):
     def _publish_zero_wrench_sequence(self) -> None:
         zero_wrench = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         for _ in range(self._zero_wrench_count):
-            self._effort_pub.publish(make_float64_array(zero_wrench))
+            self._effort_pub.publish(
+                make_wrench_stamped(self, zero_wrench, self._effort_command_frame_id)
+            )
             self._sleep_with_spin(self._zero_wrench_dt_sec)
 
     def _slow_return_to_start(self) -> None:
@@ -279,7 +290,9 @@ class CartesianButtonPressDemo(Node):
                 start + ((goal - start) * alpha)
                 for start, goal in zip(return_start_pose, self._return_pose)
             ]
-            self._position_pub.publish(make_float64_array(target_pose))
+            self._position_pub.publish(
+                make_pose_stamped(self, target_pose, self._position_command_frame_id)
+            )
             self._sleep_with_spin(dt)
 
     def _record_press_stop_pose(self) -> None:

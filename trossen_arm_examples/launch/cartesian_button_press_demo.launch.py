@@ -26,6 +26,8 @@ def launch_setup(context, *args, **kwargs):
             {
                 'position_command_topic': LaunchConfiguration('position_command_topic'),
                 'effort_command_topic': LaunchConfiguration('effort_command_topic'),
+                'position_command_frame_id': LaunchConfiguration('position_command_frame_id'),
+                'effort_command_frame_id': LaunchConfiguration('effort_command_frame_id'),
                 'auto_activate_controllers': LaunchConfiguration('auto_activate_controllers'),
                 'controller_manager_name': LaunchConfiguration('controller_manager_name'),
                 'position_controller_name': LaunchConfiguration('position_controller_name'),
@@ -115,6 +117,8 @@ def generate_launch_description() -> LaunchDescription:
             ),
             DeclareLaunchArgument('position_command_topic', default_value='/cartesian_position_controller/command'),
             DeclareLaunchArgument('effort_command_topic', default_value='/cartesian_external_effort_controller/command'),
+            DeclareLaunchArgument('position_command_frame_id', default_value='base_link'),
+            DeclareLaunchArgument('effort_command_frame_id', default_value='base_link'),
             DeclareLaunchArgument('auto_activate_controllers', default_value='true', choices=['true', 'false']),
             DeclareLaunchArgument('position_controller_name', default_value='cartesian_position_controller'),
             DeclareLaunchArgument('effort_controller_name', default_value='cartesian_external_effort_controller'),

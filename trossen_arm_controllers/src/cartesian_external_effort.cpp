@@ -12,8 +12,18 @@
 
 namespace
 {
-constexpr size_t kExpectedCommandSize = 6;
+
+bool wrench_stamped_values_are_finite(const geometry_msgs::msg::WrenchStamped & msg)
+{
+  return std::isfinite(msg.wrench.force.x) &&
+         std::isfinite(msg.wrench.force.y) &&
+         std::isfinite(msg.wrench.force.z) &&
+         std::isfinite(msg.wrench.torque.x) &&
+         std::isfinite(msg.wrench.torque.y) &&
+         std::isfinite(msg.wrench.torque.z);
 }
+
+}  // namespace
 
 namespace trossen_arm_controllers
 {
@@ -63,13 +73,13 @@ CallbackReturn CartesianExternalEffortController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  command_subscriber_ = get_node()->create_subscription<std_msgs::msg::Float64MultiArray>(
+  command_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::WrenchStamped>(
     "~/command", rclcpp::SystemDefaultsQoS(),
     std::bind(&CartesianExternalEffortController::command_callback, this, std::placeholders::_1));
 
   RCLCPP_INFO(
     get_node()->get_logger(),
-    "Configured Cartesian external effort controller. Publish [fx, fy, fz, tx, ty, tz] to '~/command'.");
+    "Configured Cartesian external effort controller. Publish geometry_msgs/msg/WrenchStamped to '~/command'.");
 
   return CallbackReturn::SUCCESS;
 }
@@ -138,24 +148,20 @@ controller_interface::return_type CartesianExternalEffortController::update(
 }
 
 void CartesianExternalEffortController::command_callback(
-  const std_msgs::msg::Float64MultiArray::SharedPtr msg)
+  const geometry_msgs::msg::WrenchStamped::SharedPtr msg)
 {
-  if (msg->data.size() != kExpectedCommandSize) {
-    RCLCPP_ERROR(
-      get_node()->get_logger(),
-      "Cartesian external effort command must contain exactly 6 values: [fx, fy, fz, tx, ty, tz]. Got %zu.",
-      msg->data.size());
+  if (!wrench_stamped_values_are_finite(*msg)) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian external effort WrenchStamped contains a non-finite value.");
     return;
   }
 
   Command command;
-  for (size_t i = 0; i < kExpectedCommandSize; ++i) {
-    if (!std::isfinite(msg->data[i])) {
-      RCLCPP_ERROR(get_node()->get_logger(), "Cartesian external effort command contains a non-finite value.");
-      return;
-    }
-    command.wrench[i] = msg->data[i];
-  }
+  command.wrench[0] = msg->wrench.force.x;
+  command.wrench[1] = msg->wrench.force.y;
+  command.wrench[2] = msg->wrench.force.z;
+  command.wrench[3] = msg->wrench.torque.x;
+  command.wrench[4] = msg->wrench.torque.y;
+  command.wrench[5] = msg->wrench.torque.z;
 
   command.goal_time = goal_time_;
   command.interpolation_space = interpolation_space_command_value_;

@@ -73,11 +73,13 @@ ros2 launch trossen_arm_examples cartesian_position_demo.launch.py \
   step_count:=5
 ```
 
-The command format is:
+The controller command topic now uses `geometry_msgs/msg/PoseStamped`. The example still keeps the launch/config pose as a compact six-value list:
 
 ```text
-[x, y, z, rx, ry, rz]
+[x, y, z, roll, pitch, yaw]
 ```
+
+The example converts that list to `PoseStamped` before publishing.
 
 ## Run the button press example with bringup
 
@@ -124,7 +126,14 @@ ros2 launch trossen_arm_examples cartesian_button_press_demo.launch.py \
   press_duration_sec:=10.0
 ```
 
-The direction and wrench-related formats are:
+The external-effort controller command topic now uses `geometry_msgs/msg/WrenchStamped`. The example computes the six effort values and publishes them as:
+
+```text
+wrench.force:  [fx, fy, fz]
+wrench.torque: [tx, ty, tz]
+```
+
+The direction and gain parameter formats remain:
 
 ```text
 press_direction: [x, y, z]

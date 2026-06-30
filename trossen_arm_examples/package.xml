@@ -4,7 +4,7 @@
   <name>trossen_arm_examples</name>
   <version>0.1.0</version>
   <description>Examples for commanding the Trossen Arm Cartesian ros2_control controllers.</description>
-  <maintainer email="support@trossenrobotics.com">Trossen Robotics</maintainer>
+  <maintainer email="trsupport@trossenrobotics.com">Trossen Robotics</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
@@ -12,13 +12,13 @@
   <exec_depend>controller_manager</exec_depend>
   <exec_depend>controller_manager_msgs</exec_depend>
   <exec_depend>control_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>joint_state_broadcaster</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>parallel_gripper_action_controller</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
-  <exec_depend>std_msgs</exec_depend>
   <exec_depend>trossen_arm_controllers</exec_depend>
   <exec_depend>trossen_arm_description</exec_depend>
   <exec_depend>trossen_arm_hardware</exec_depend>

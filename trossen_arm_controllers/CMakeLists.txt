@@ -7,7 +7,7 @@ find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(realtime_tools REQUIRED)
-find_package(std_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 find_package(trossen_arm_hardware REQUIRED)
 
 set(ROS_DEPENDENCIES
@@ -17,7 +17,7 @@ set(ROS_DEPENDENCIES
   rclcpp::rclcpp
   trossen_arm_hardware::trossen_arm_hardware
   realtime_tools::realtime_tools
-  ${std_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
 )
 
 include_directories(

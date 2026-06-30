@@ -2,7 +2,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray
+from geometry_msgs.msg import PoseStamped
 
 from trossen_arm_examples.controller_manager_helpers import ControllerManagerClient
 from trossen_arm_examples.message_helpers import (
@@ -10,7 +10,7 @@ from trossen_arm_examples.message_helpers import (
     get_bool_parameter,
     get_float_array_parameter,
     get_string_parameter,
-    make_float64_array,
+    make_pose_stamped,
 )
 
 
@@ -19,6 +19,7 @@ class CartesianPositionDemo(Node):
         super().__init__('cartesian_position_demo')
 
         declare_dynamic_parameter(self, 'command_topic', '/cartesian_position_controller/command')
+        declare_dynamic_parameter(self, 'command_frame_id', 'base_link')
         declare_dynamic_parameter(self, 'auto_activate_controller', False)
         declare_dynamic_parameter(self, 'controller_manager_name', '/controller_manager')
         declare_dynamic_parameter(self, 'controller_name', 'cartesian_position_controller')
@@ -34,6 +35,7 @@ class CartesianPositionDemo(Node):
         declare_dynamic_parameter(self, 'return_settle_sec', 2.0)
 
         self._command_topic = get_string_parameter(self, 'command_topic')
+        self._command_frame_id = get_string_parameter(self, 'command_frame_id')
         self._start_pose = get_float_array_parameter(self, 'start_pose', 6)
         self._base_frame_step = get_float_array_parameter(self, 'base_frame_step', 6)
         self._step_count = int(self.get_parameter('step_count').value)
@@ -46,7 +48,7 @@ class CartesianPositionDemo(Node):
         self._return_wait_sec = float(self.get_parameter('return_wait_sec').value)
         self._return_settle_sec = float(self.get_parameter('return_settle_sec').value)
 
-        self._publisher = self.create_publisher(Float64MultiArray, self._command_topic, 10)
+        self._publisher = self.create_publisher(PoseStamped, self._command_topic, 10)
 
     def run(self) -> None:
         if get_bool_parameter(self, 'auto_activate_controller'):
@@ -105,10 +107,11 @@ class CartesianPositionDemo(Node):
         self.get_logger().info('Cartesian position demo complete.')
 
     def _publish_command(self, command: list[float]) -> None:
-        self._publisher.publish(make_float64_array(command))
+        self._publisher.publish(make_pose_stamped(self, command, self._command_frame_id))
         self.get_logger().info(
-            'Published Cartesian position command to '
-            f'`{self._command_topic}`: {self._format_values(command)}'
+            'Published Cartesian PoseStamped command to '
+            f'`{self._command_topic}` in frame `{self._command_frame_id}`: '
+            f'{self._format_values(command)}'
         )
 
     def _wait_for_command_subscription(self, timeout_sec: float = 5.0) -> None:

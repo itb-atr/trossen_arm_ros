@@ -14,7 +14,7 @@
 #include "rclcpp/subscription.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "realtime_tools/realtime_buffer.hpp"
-#include "std_msgs/msg/float64_multi_array.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 #include "trossen_arm_hardware/interface.hpp"
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -39,7 +39,7 @@ public:
 private:
   struct Command
   {
-    std::array<double, 6> pose{};  // x, y, z, rx, ry, rz; meters and angle-axis radians.
+    std::array<double, 6> pose{};  // x, y, z, roll, pitch, yaw; meters and radians.
     double goal_time{0.0};
     double interpolation_space{1.0};  // 0.0 = joint, 1.0 = cartesian.
     uint64_t id{0};
@@ -51,7 +51,7 @@ private:
     double value,
     const rclcpp::Logger & logger);
 
-  void command_callback(const std_msgs::msg::Float64MultiArray::SharedPtr msg);
+  void command_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
 
   std::string cartesian_interface_name_{trossen_arm_hardware::CARTESIAN_COMPONENT_NAME};
   std::string interpolation_space_name_{"cartesian"};
@@ -62,7 +62,7 @@ private:
   std::atomic<uint64_t> next_command_id_{0};
   uint64_t last_command_id_{0};
 
-  rclcpp::Subscription<std_msgs::msg::Float64MultiArray>::SharedPtr command_subscriber_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr command_subscriber_;
 };
 
 }  // namespace trossen_arm_controllers

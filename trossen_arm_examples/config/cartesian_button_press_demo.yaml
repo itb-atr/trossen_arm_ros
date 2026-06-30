@@ -2,6 +2,8 @@ cartesian_button_press_demo:
   ros__parameters:
     position_command_topic: /cartesian_position_controller/command
     effort_command_topic: /cartesian_external_effort_controller/command
+    position_command_frame_id: base_link
+    effort_command_frame_id: base_link
     auto_activate_controllers: true
     controller_manager_name: /controller_manager
     position_controller_name: cartesian_position_controller
