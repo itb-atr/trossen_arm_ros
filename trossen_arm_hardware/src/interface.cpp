@@ -107,8 +107,25 @@ TrossenArmHardwareInterface::on_init(const hardware_interface::HardwareInfo & in
   // Joint command interfaces
   joint_position_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
   joint_velocity_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
-  joint_external_effort_commands_.resize(info_.joints.size(),
-      std::numeric_limits<double>::quiet_NaN());
+  joint_external_effort_commands_.resize(info_.joints.size(), std::numeric_limits<double>::quiet_NaN());
+
+  // Cartesian state and command interfaces.
+  const auto nan = std::numeric_limits<double>::quiet_NaN();
+  cartesian_positions_.fill(nan);
+  cartesian_velocities_.fill(nan);
+  cartesian_external_efforts_.fill(nan);
+
+  cartesian_position_commands_.fill(0.0);
+  cartesian_position_goal_time_command_ = 0.0;
+  cartesian_position_interpolation_space_command_ = 1.0;
+  cartesian_position_command_id_ = 0.0;
+  last_cartesian_position_command_id_ = 0.0;
+
+  cartesian_external_effort_commands_.fill(0.0);
+  cartesian_external_effort_goal_time_command_ = 0.0;
+  cartesian_external_effort_interpolation_space_command_ = 1.0;
+  cartesian_external_effort_command_id_ = 0.0;
+  last_cartesian_external_effort_command_id_ = 0.0;
 
   for (const auto & joint : info_.joints) {
     // Each joint has 3 command interfaces: position, velocity, external effort (in that order)
@@ -219,25 +236,37 @@ TrossenArmHardwareInterface::export_state_interfaces()
 {
   std::vector<hardware_interface::StateInterface> state_interfaces;
   for (size_t i = 0; i < info_.joints.size(); i++) {
-    // Position state interfaces
-    state_interfaces.emplace_back(
-      hardware_interface::StateInterface(
-        info_.joints[i].name,
-        HW_IF_POSITION,
-        &joint_positions_[i]));
-    // Velocity state interfaces
-    state_interfaces.emplace_back(
-      hardware_interface::StateInterface(
-        info_.joints[i].name,
-        HW_IF_VELOCITY,
-        &joint_velocities_[i]));
-    // Effort state interfaces
-    state_interfaces.emplace_back(
-      hardware_interface::StateInterface(
-        info_.joints[i].name,
-        HW_IF_EFFORT,
-        &joint_efforts_[i]));
+    state_interfaces.emplace_back(info_.joints[i].name, HW_IF_POSITION, &joint_positions_[i]);
+    state_interfaces.emplace_back(info_.joints[i].name, HW_IF_VELOCITY, &joint_velocities_[i]);
+    state_interfaces.emplace_back(info_.joints[i].name, HW_IF_EFFORT, &joint_efforts_[i]);
   }
+
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_X, &cartesian_positions_[0]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_Y, &cartesian_positions_[1]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_Z, &cartesian_positions_[2]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_RX, &cartesian_positions_[3]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_RY, &cartesian_positions_[4]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_RZ, &cartesian_positions_[5]);
+
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_VELOCITY_X, &cartesian_velocities_[0]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_VELOCITY_Y, &cartesian_velocities_[1]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_VELOCITY_Z, &cartesian_velocities_[2]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_VELOCITY_RX, &cartesian_velocities_[3]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_VELOCITY_RY, &cartesian_velocities_[4]);
+  state_interfaces.emplace_back(CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_VELOCITY_RZ, &cartesian_velocities_[5]);
+
+  state_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_FX, &cartesian_external_efforts_[0]);
+  state_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_FY, &cartesian_external_efforts_[1]);
+  state_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_FZ, &cartesian_external_efforts_[2]);
+  state_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TX, &cartesian_external_efforts_[3]);
+  state_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TY, &cartesian_external_efforts_[4]);
+  state_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TZ, &cartesian_external_efforts_[5]);
 
   return state_interfaces;
 }
@@ -247,25 +276,62 @@ TrossenArmHardwareInterface::export_command_interfaces()
 {
   std::vector<hardware_interface::CommandInterface> command_interfaces;
   for (size_t i = 0; i < info_.joints.size(); i++) {
-    // Position command interfaces
+    command_interfaces.emplace_back(info_.joints[i].name, HW_IF_POSITION, &joint_position_commands_[i]);
+    command_interfaces.emplace_back(info_.joints[i].name, HW_IF_VELOCITY, &joint_velocity_commands_[i]);
     command_interfaces.emplace_back(
-      hardware_interface::CommandInterface(
-        info_.joints[i].name,
-        HW_IF_POSITION,
-        &joint_position_commands_[i]));
-    // Velocity command interfaces
-    command_interfaces.emplace_back(
-      hardware_interface::CommandInterface(
-        info_.joints[i].name,
-        HW_IF_VELOCITY,
-        &joint_velocity_commands_[i]));
-    // External effort command interfaces
-    command_interfaces.emplace_back(
-      hardware_interface::CommandInterface(
-        info_.joints[i].name,
-        HW_IF_EXTERNAL_EFFORT,
-        &joint_external_effort_commands_[i]));
+      info_.joints[i].name, HW_IF_EXTERNAL_EFFORT, &joint_external_effort_commands_[i]);
   }
+
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_X, &cartesian_position_commands_[0]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_Y, &cartesian_position_commands_[1]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_Z, &cartesian_position_commands_[2]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_RX, &cartesian_position_commands_[3]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_RY, &cartesian_position_commands_[4]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_RZ, &cartesian_position_commands_[5]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_GOAL_TIME,
+    &cartesian_position_goal_time_command_);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_INTERPOLATION_SPACE,
+    &cartesian_position_interpolation_space_command_);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_POSITION_COMMAND_ID,
+    &cartesian_position_command_id_);
+
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_FX,
+    &cartesian_external_effort_commands_[0]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_FY,
+    &cartesian_external_effort_commands_[1]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_FZ,
+    &cartesian_external_effort_commands_[2]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TX,
+    &cartesian_external_effort_commands_[3]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TY,
+    &cartesian_external_effort_commands_[4]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TZ,
+    &cartesian_external_effort_commands_[5]);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_GOAL_TIME,
+    &cartesian_external_effort_goal_time_command_);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_INTERPOLATION_SPACE,
+    &cartesian_external_effort_interpolation_space_command_);
+  command_interfaces.emplace_back(
+    CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_COMMAND_ID,
+    &cartesian_external_effort_command_id_);
+
   return command_interfaces;
 }
 
@@ -290,11 +356,7 @@ TrossenArmHardwareInterface::on_configure(const rclcpp_lifecycle::State & /*prev
   }
 
   try {
-    arm_driver_->configure(
-      robot_model_,
-      end_effector_,
-      driver_ip_address_.c_str(),
-      true);
+    arm_driver_->configure(robot_model_, end_effector_, driver_ip_address_.c_str(), true);
   } catch (const std::exception & e) {
     RCLCPP_FATAL(
       get_logger(),
@@ -344,6 +406,10 @@ TrossenArmHardwareInterface::read(
   // Get joint efforts
   joint_efforts_ = robot_output_.joint.all.efforts;
 
+  cartesian_positions_ = robot_output_.cartesian.positions;
+  cartesian_velocities_ = robot_output_.cartesian.velocities;
+  cartesian_external_efforts_ = robot_output_.cartesian.external_efforts;
+
   return return_type::OK;
 }
 
@@ -358,18 +424,70 @@ TrossenArmHardwareInterface::write(
       get_logger(),
       "First write update. Setting joint position commands to current positions.");
     joint_position_commands_ = joint_positions_;
+    cartesian_position_commands_ = cartesian_positions_;
     first_update_ = false;
   }
 
-  // Send the now validated commands to the driver
-  if (arm_position_mode_running_) {
-    arm_driver_->set_all_positions(joint_position_commands_, 0.0, false);
-  } else if (arm_velocity_mode_running_) {
-    RCLCPP_ERROR(get_logger(), "Velocity mode not implemented yet.");
+  try {
+    if (arm_position_mode_running_) {
+      arm_driver_->set_all_positions(joint_position_commands_, 0.0, false);
+    } else if (arm_velocity_mode_running_) {
+      RCLCPP_ERROR(get_logger(), "Velocity mode not implemented yet.");
+      return return_type::ERROR;
+    } else if (arm_external_effort_mode_running_) {
+      arm_driver_->set_all_external_efforts(joint_external_effort_commands_, 0.0, false);
+    } else if (cartesian_position_mode_running_) {
+      if (!is_new_command(cartesian_position_command_id_, last_cartesian_position_command_id_)) {
+        return return_type::OK;
+      }
+
+      if (!all_finite(cartesian_position_commands_)) {
+        RCLCPP_ERROR(get_logger(), "Cartesian position command contains a non-finite value.");
+        return return_type::ERROR;
+      }
+
+      if (!std::isfinite(cartesian_position_goal_time_command_) ||
+        cartesian_position_goal_time_command_ < 0.0)
+      {
+        RCLCPP_ERROR(get_logger(), "Cartesian position goal_time must be finite and >= 0.0.");
+        return return_type::ERROR;
+      }
+
+      arm_driver_->set_cartesian_positions(
+        cartesian_position_commands_,
+        interpolation_space_from_command(cartesian_position_interpolation_space_command_),
+        cartesian_position_goal_time_command_,
+        false);
+      last_cartesian_position_command_id_ = cartesian_position_command_id_;
+    } else if (cartesian_external_effort_mode_running_) {
+      if (!is_new_command(
+          cartesian_external_effort_command_id_, last_cartesian_external_effort_command_id_))
+      {
+        return return_type::OK;
+      }
+
+      if (!all_finite(cartesian_external_effort_commands_)) {
+        RCLCPP_ERROR(get_logger(), "Cartesian external effort command contains a non-finite value.");
+        return return_type::ERROR;
+      }
+
+      if (!std::isfinite(cartesian_external_effort_goal_time_command_) ||
+        cartesian_external_effort_goal_time_command_ < 0.0)
+      {
+        RCLCPP_ERROR(get_logger(), "Cartesian external effort goal_time must be finite and >= 0.0.");
+        return return_type::ERROR;
+      }
+
+      arm_driver_->set_cartesian_external_efforts(
+        cartesian_external_effort_commands_,
+        interpolation_space_from_command(cartesian_external_effort_interpolation_space_command_),
+        cartesian_external_effort_goal_time_command_,
+        false);
+      last_cartesian_external_effort_command_id_ = cartesian_external_effort_command_id_;
+    }
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "Failed to write command to TrossenArmDriver: %s", e.what());
     return return_type::ERROR;
-    // arm_driver_->set_all_velocities(joint_velocity_commands_, 0.0,
-  } else if (arm_external_effort_mode_running_) {
-    arm_driver_->set_all_external_efforts(joint_external_effort_commands_, 0.0, false);
   }
 
   return return_type::OK;
@@ -386,176 +504,136 @@ TrossenArmHardwareInterface::prepare_command_mode_switch(
     return return_type::OK;
   }
 
-  // Determine which single command interface type (position/velocity/external effort) is requested
-  std::string requested_interface_type;
+  std::string requested_mode;
   for (const auto & iface : start_interfaces) {
-    // Interface names are in the format: `<joint_name>/<interface_type>`
-    auto slash_pos = iface.rfind('/');
-    std::string type = (slash_pos == std::string::npos) ? iface : iface.substr(slash_pos + 1);
+    const auto slash_pos = iface.rfind('/');
+    const std::string type = (slash_pos == std::string::npos) ? iface : iface.substr(slash_pos + 1);
+    const std::string mode = command_mode_from_interface_type(type);
 
-    if (type != HW_IF_POSITION && type != HW_IF_VELOCITY && type != HW_IF_EXTERNAL_EFFORT) {
+    if (mode.empty()) {
       RCLCPP_ERROR(get_logger(), "Unsupported command interface '%s' requested.", type.c_str());
       return return_type::ERROR;
     }
 
-    if (requested_interface_type.empty()) {
-      requested_interface_type = type;
-    } else if (requested_interface_type != type) {
+    if (requested_mode.empty()) {
+      requested_mode = mode;
+    } else if (requested_mode != mode) {
       RCLCPP_ERROR(
-        get_logger(),
-        "Mixed command interface types requested in a single mode switch: '%s' and '%s'.",
-        requested_interface_type.c_str(), type.c_str());
+        get_logger(), "Mixed command modes requested in a single mode switch: '%s' and '%s'.",
+        requested_mode.c_str(), mode.c_str());
       return return_type::ERROR;
     }
   }
 
-  // Validate transitions. Only one control mode can be active at a time.
-  // If a different mode is already running, its interfaces must be listed in stop_interfaces.
-
-  if (requested_interface_type == HW_IF_POSITION) {
-    // Validate position mode can be started - need to stop velocity, external effort interfaces
-    if (arm_position_mode_running_) {
-      // No change needed
-      RCLCPP_DEBUG(get_logger(), "Position mode already active. No change needed.");
-      return return_type::OK;
-    }
-    if (arm_velocity_mode_running_ && !interface_type_in_stop(stop_interfaces, HW_IF_VELOCITY)) {
-      RCLCPP_ERROR(
-        get_logger(),
-        "Velocity mode is active but not requested to stop before switching to position mode.");
-      return return_type::ERROR;
-    }
-    if (
-      arm_external_effort_mode_running_ && !interface_type_in_stop(stop_interfaces,
-        HW_IF_EXTERNAL_EFFORT))
-    {
-      RCLCPP_ERROR(
-        get_logger(),
-        "External effort mode is active but not requested to stop before switching to "
-        "position mode.");
-      return return_type::ERROR;
-    }
-  } else if (requested_interface_type == HW_IF_VELOCITY) {
-    // Validate velocity mode can be started - need to stop position, external effort interfaces
-    if (arm_velocity_mode_running_) {
-      // No change needed
-      RCLCPP_DEBUG(get_logger(), "Velocity mode already active. No change needed.");
-      return return_type::OK;
-    }
-    if (arm_position_mode_running_ && !interface_type_in_stop(stop_interfaces, HW_IF_POSITION)) {
-      RCLCPP_ERROR(
-        get_logger(),
-        "Position mode is active but not requested to stop before switching to velocity mode.");
-      return return_type::ERROR;
-    }
-    if (
-      arm_external_effort_mode_running_ && !interface_type_in_stop(stop_interfaces,
-        HW_IF_EXTERNAL_EFFORT))
-    {
-      RCLCPP_ERROR(
-        get_logger(),
-        "External effort mode is active but not requested to stop before switching to "
-        "velocity mode.");
-      return return_type::ERROR;
-    }
-    // TODO(lukeschmtit-tr): Velocity mode not implemented yet - handle at prepare
+  if (requested_mode == HW_IF_VELOCITY) {
     RCLCPP_ERROR(get_logger(), "Velocity mode requested but not implemented.");
     return return_type::ERROR;
-  } else if (requested_interface_type == HW_IF_EXTERNAL_EFFORT) {
-    // Validate external effort mode can be started - need to stop position, velocity interfaces
-    if (arm_external_effort_mode_running_) {
-      // No change needed
-      RCLCPP_DEBUG(get_logger(), "External effort mode already active. No change needed.");
-      return return_type::OK;
+  }
+
+  const std::set<std::string> active_modes = {
+    arm_position_mode_running_ ? std::string(HW_IF_POSITION) : std::string(),
+    arm_velocity_mode_running_ ? std::string(HW_IF_VELOCITY) : std::string(),
+    arm_external_effort_mode_running_ ? std::string(HW_IF_EXTERNAL_EFFORT) : std::string(),
+    cartesian_position_mode_running_ ? std::string(HW_IF_CARTESIAN_POSITION) : std::string(),
+    cartesian_external_effort_mode_running_ ? std::string(HW_IF_CARTESIAN_EXTERNAL_EFFORT) : std::string()};
+
+  for (const auto & active_mode : active_modes) {
+    if (active_mode.empty() || active_mode == requested_mode) {
+      continue;
     }
-    if (arm_position_mode_running_ && !interface_type_in_stop(stop_interfaces, HW_IF_POSITION)) {
+
+    if (!interface_mode_in_stop(stop_interfaces, active_mode)) {
       RCLCPP_ERROR(
-        get_logger(),
-        "Position mode is active but not requested to stop before switching to "
-        "external effort mode.");
-      return return_type::ERROR;
-    }
-    if (arm_velocity_mode_running_ && !interface_type_in_stop(stop_interfaces, HW_IF_VELOCITY)) {
-      RCLCPP_ERROR(
-        get_logger(),
-        "Velocity mode is active but not requested to stop before switching to "
-        "external effort mode.");
+        get_logger(), "Mode '%s' is active but not requested to stop before switching to '%s'.",
+        active_mode.c_str(), requested_mode.c_str());
       return return_type::ERROR;
     }
   }
 
   RCLCPP_DEBUG(
-    get_logger(),
-    "Command mode switch preparation successful. New mode requested: '%s'.",
-    requested_interface_type.c_str());
-
+    get_logger(), "Command mode switch preparation successful. New mode requested: '%s'.",
+    requested_mode.c_str());
   return return_type::OK;
 }
 
-return_type
-TrossenArmHardwareInterface::perform_command_mode_switch(
+return_type TrossenArmHardwareInterface::perform_command_mode_switch(
   const std::vector<std::string> & start_interfaces,
   const std::vector<std::string> & stop_interfaces)
 {
-  // Determine which command interface types are being started and stopped
-  auto stop_types = interface_types_from_list(stop_interfaces);
-  auto start_types = interface_types_from_list(start_interfaces);
+  const auto stop_modes = interface_types_from_list(stop_interfaces);
+  const auto start_modes = interface_types_from_list(start_interfaces);
 
-  // Stop requested modes
-  if (stop_types.count(HW_IF_POSITION)) {
+  if (stop_modes.count(HW_IF_POSITION)) {
     arm_position_mode_running_ = false;
   }
-  if (stop_types.count(HW_IF_VELOCITY)) {
+  if (stop_modes.count(HW_IF_VELOCITY)) {
     arm_velocity_mode_running_ = false;
   }
-  if (stop_types.count(HW_IF_EXTERNAL_EFFORT)) {
+  if (stop_modes.count(HW_IF_EXTERNAL_EFFORT)) {
     arm_external_effort_mode_running_ = false;
+  }
+  if (stop_modes.count(HW_IF_CARTESIAN_POSITION)) {
+    cartesian_position_mode_running_ = false;
+  }
+  if (stop_modes.count(HW_IF_CARTESIAN_EXTERNAL_EFFORT)) {
+    cartesian_external_effort_mode_running_ = false;
   }
 
-  // Start requested mode (only one should be present due to prepare validation)
-  if (start_types.count(HW_IF_POSITION)) {
-    arm_position_mode_running_ = true;
-    arm_velocity_mode_running_ = false;
-    arm_external_effort_mode_running_ = false;
-    joint_position_commands_ = joint_positions_;
-    try {
+  try {
+    if (start_modes.count(HW_IF_POSITION)) {
+      arm_position_mode_running_ = true;
+      arm_velocity_mode_running_ = false;
+      arm_external_effort_mode_running_ = false;
+      cartesian_position_mode_running_ = false;
+      cartesian_external_effort_mode_running_ = false;
+      joint_position_commands_ = joint_positions_;
       arm_driver_->set_all_modes(trossen_arm::Mode::position);
-    } catch (const std::exception & e) {
-      RCLCPP_ERROR(get_logger(), "Failed to set driver to position mode: %s", e.what());
+      RCLCPP_INFO(get_logger(), "Switched to position command mode.");
+    } else if (start_modes.count(HW_IF_VELOCITY)) {
+      RCLCPP_ERROR(get_logger(), "Velocity mode requested but not implemented.");
       return return_type::ERROR;
-    }
-    RCLCPP_INFO(get_logger(), "Switched to position command mode.");
-  } else if (start_types.count(HW_IF_VELOCITY)) {
-    // Velocity not implemented yet
-    RCLCPP_ERROR(get_logger(), "Velocity mode requested but not implemented.");
-    return return_type::ERROR;
-  } else if (start_types.count(HW_IF_EXTERNAL_EFFORT)) {
-    arm_position_mode_running_ = false;
-    arm_velocity_mode_running_ = false;
-    arm_external_effort_mode_running_ = true;
-    std::fill(joint_external_effort_commands_.begin(), joint_external_effort_commands_.end(), 0.0);
-    try {
+    } else if (start_modes.count(HW_IF_EXTERNAL_EFFORT)) {
+      arm_position_mode_running_ = false;
+      arm_velocity_mode_running_ = false;
+      arm_external_effort_mode_running_ = true;
+      cartesian_position_mode_running_ = false;
+      cartesian_external_effort_mode_running_ = false;
+      std::fill(joint_external_effort_commands_.begin(), joint_external_effort_commands_.end(), 0.0);
       arm_driver_->set_all_modes(trossen_arm::Mode::external_effort);
-    } catch (const std::exception & e) {
-      RCLCPP_ERROR(get_logger(), "Failed to set driver to external effort mode: %s", e.what());
-      return return_type::ERROR;
+      RCLCPP_INFO(get_logger(), "Switched to external effort command mode.");
+    } else if (start_modes.count(HW_IF_CARTESIAN_POSITION)) {
+      arm_position_mode_running_ = false;
+      arm_velocity_mode_running_ = false;
+      arm_external_effort_mode_running_ = false;
+      cartesian_position_mode_running_ = true;
+      cartesian_external_effort_mode_running_ = false;
+      cartesian_position_commands_ = cartesian_positions_;
+      last_cartesian_position_command_id_ = cartesian_position_command_id_;
+      arm_driver_->set_all_modes(trossen_arm::Mode::position);
+      RCLCPP_INFO(get_logger(), "Switched to Cartesian position command mode.");
+    } else if (start_modes.count(HW_IF_CARTESIAN_EXTERNAL_EFFORT)) {
+      arm_position_mode_running_ = false;
+      arm_velocity_mode_running_ = false;
+      arm_external_effort_mode_running_ = false;
+      cartesian_position_mode_running_ = false;
+      cartesian_external_effort_mode_running_ = true;
+      cartesian_external_effort_commands_.fill(0.0);
+      last_cartesian_external_effort_command_id_ = cartesian_external_effort_command_id_;
+      arm_driver_->set_all_modes(trossen_arm::Mode::external_effort);
+      RCLCPP_INFO(get_logger(), "Switched to Cartesian external effort command mode.");
     }
-    RCLCPP_INFO(get_logger(), "Switched to external effort command mode.");
-  }
 
-  // If no start interfaces provided we may just be stopping a mode
-  if (start_types.empty()) {
-    if (!arm_position_mode_running_ && !arm_velocity_mode_running_ &&
-      !arm_external_effort_mode_running_)
+    if (start_modes.empty() &&
+      !arm_position_mode_running_ && !arm_velocity_mode_running_ &&
+      !arm_external_effort_mode_running_ && !cartesian_position_mode_running_ &&
+      !cartesian_external_effort_mode_running_)
     {
-      try {
-        arm_driver_->set_all_modes(trossen_arm::Mode::idle);
-      } catch (const std::exception & e) {
-        RCLCPP_ERROR(get_logger(), "Failed to set driver to idle mode: %s", e.what());
-        return return_type::ERROR;
-      }
+      arm_driver_->set_all_modes(trossen_arm::Mode::idle);
       RCLCPP_INFO(get_logger(), "All command modes stopped. Driver set to idle.");
     }
+  } catch (const std::exception & e) {
+    RCLCPP_ERROR(get_logger(), "Failed during command mode switch: %s", e.what());
+    return return_type::ERROR;
   }
 
   return return_type::OK;
@@ -566,8 +644,13 @@ TrossenArmHardwareInterface::on_deactivate(const rclcpp_lifecycle::State & /*pre
 {
   arm_driver_->set_all_modes(trossen_arm::Mode::idle);
 
-  RCLCPP_INFO(get_logger(), "TrossenArmDriver disabled.");
+  arm_position_mode_running_ = false;
+  arm_velocity_mode_running_ = false;
+  arm_external_effort_mode_running_ = false;
+  cartesian_position_mode_running_ = false;
+  cartesian_external_effort_mode_running_ = false;
 
+  RCLCPP_INFO(get_logger(), "TrossenArmDriver disabled.");
   return CallbackReturn::SUCCESS;
 }
 
@@ -576,8 +659,49 @@ TrossenArmHardwareInterface::on_cleanup(const rclcpp_lifecycle::State & /*previo
 {
   robot_output_ = trossen_arm::RobotOutput();
   arm_driver_.reset();
-
   return CallbackReturn::SUCCESS;
+}
+
+bool TrossenArmHardwareInterface::interface_type_in_stop(
+  const std::vector<std::string> & stop_interfaces,
+  const std::string & type)
+{
+  return interface_mode_in_stop(stop_interfaces, type);
+}
+
+std::set<std::string> TrossenArmHardwareInterface::interface_types_from_list(
+  const std::vector<std::string> & ifaces)
+{
+  std::set<std::string> types;
+
+  for (const auto & iface : ifaces) {
+    const auto slash_pos = iface.rfind('/');
+    const std::string type = (slash_pos == std::string::npos) ? iface : iface.substr(slash_pos + 1);
+    const std::string mode = command_mode_from_interface_type(type);
+    if (!mode.empty()) {
+      types.insert(mode);
+    }
+  }
+
+  return types;
+}
+
+std::string TrossenArmHardwareInterface::command_mode_from_interface_type(
+  const std::string & type) const
+{
+  if (type == HW_IF_POSITION || type == HW_IF_VELOCITY || type == HW_IF_EXTERNAL_EFFORT) {
+    return type;
+  }
+
+  if (has_prefix(type, HW_IF_CARTESIAN_POSITION_PREFIX)) {
+    return HW_IF_CARTESIAN_POSITION;
+  }
+
+  if (has_prefix(type, HW_IF_CARTESIAN_EXTERNAL_EFFORT_PREFIX)) {
+    return HW_IF_CARTESIAN_EXTERNAL_EFFORT;
+  }
+
+  return {};
 }
 
 rclcpp::Logger TrossenArmHardwareInterface::get_logger() const
@@ -585,31 +709,49 @@ rclcpp::Logger TrossenArmHardwareInterface::get_logger() const
   return rclcpp::get_logger("trossen_arm_hardware");
 }
 
-bool
-TrossenArmHardwareInterface::interface_type_in_stop(
+bool TrossenArmHardwareInterface::interface_mode_in_stop(
   const std::vector<std::string> & stop_interfaces,
-  const std::string & type)
+  const std::string & mode)
 {
   for (const auto & iface : stop_interfaces) {
-    auto slash_pos = iface.rfind('/');
-    std::string stop_type = (slash_pos == std::string::npos) ? iface : iface.substr(slash_pos + 1);
-    if (stop_type == type) {
+    const auto slash_pos = iface.rfind('/');
+    const std::string stop_type =
+      (slash_pos == std::string::npos) ? iface : iface.substr(slash_pos + 1);
+    if (command_mode_from_interface_type(stop_type) == mode) {
       return true;
     }
   }
   return false;
 }
 
-std::set<std::string>
-TrossenArmHardwareInterface::interface_types_from_list(const std::vector<std::string> & ifaces)
+bool TrossenArmHardwareInterface::has_prefix(
+  const std::string & value, const std::string & prefix) const
 {
-  std::set<std::string> types;
-  for (const auto & iface : ifaces) {
-    auto slash_pos = iface.rfind('/');
-    std::string type = (slash_pos == std::string::npos) ? iface : iface.substr(slash_pos + 1);
-    types.insert(type);
+  return value.rfind(prefix, 0) == 0;
+}
+
+bool TrossenArmHardwareInterface::is_new_command(double command_id, double last_command_id) const
+{
+  return std::isfinite(command_id) && command_id > 0.0 && command_id != last_command_id;
+}
+
+bool TrossenArmHardwareInterface::all_finite(const std::array<double, 6> & values) const
+{
+  for (const auto value : values) {
+    if (!std::isfinite(value)) {
+      return false;
+    }
   }
-  return types;
+  return true;
+}
+
+trossen_arm::InterpolationSpace TrossenArmHardwareInterface::interpolation_space_from_command(
+  double value) const
+{
+  if (value < 0.5) {
+    return trossen_arm::InterpolationSpace::joint;
+  }
+  return trossen_arm::InterpolationSpace::cartesian;
 }
 
 }  // namespace trossen_arm_hardware

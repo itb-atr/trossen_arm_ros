@@ -29,8 +29,13 @@
 #ifndef TROSSEN_ARM_HARDWARE__INTERFACE_HPP_
 #define TROSSEN_ARM_HARDWARE__INTERFACE_HPP_
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -54,6 +59,42 @@ constexpr char END_EFFECTOR_FOLLOWER[] = "follower";
 constexpr char END_EFFECTOR_LEADER[] = "leader";
 
 constexpr char HW_IF_EXTERNAL_EFFORT[] = "external_effort";
+
+constexpr char CARTESIAN_COMPONENT_NAME[] = "cartesian";
+
+constexpr char HW_IF_CARTESIAN_POSITION[] = "cartesian_position";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT[] = "cartesian_external_effort";
+
+constexpr char HW_IF_CARTESIAN_POSITION_PREFIX[] = "position.";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_PREFIX[] = "external_effort.";
+
+constexpr char HW_IF_CARTESIAN_POSITION_X[] = "position.x";
+constexpr char HW_IF_CARTESIAN_POSITION_Y[] = "position.y";
+constexpr char HW_IF_CARTESIAN_POSITION_Z[] = "position.z";
+constexpr char HW_IF_CARTESIAN_POSITION_RX[] = "position.rx";
+constexpr char HW_IF_CARTESIAN_POSITION_RY[] = "position.ry";
+constexpr char HW_IF_CARTESIAN_POSITION_RZ[] = "position.rz";
+constexpr char HW_IF_CARTESIAN_POSITION_GOAL_TIME[] = "position.goal_time";
+constexpr char HW_IF_CARTESIAN_POSITION_INTERPOLATION_SPACE[] = "position.interpolation_space";
+constexpr char HW_IF_CARTESIAN_POSITION_COMMAND_ID[] = "position.command_id";
+
+constexpr char HW_IF_CARTESIAN_VELOCITY_X[] = "velocity.x";
+constexpr char HW_IF_CARTESIAN_VELOCITY_Y[] = "velocity.y";
+constexpr char HW_IF_CARTESIAN_VELOCITY_Z[] = "velocity.z";
+constexpr char HW_IF_CARTESIAN_VELOCITY_RX[] = "velocity.rx";
+constexpr char HW_IF_CARTESIAN_VELOCITY_RY[] = "velocity.ry";
+constexpr char HW_IF_CARTESIAN_VELOCITY_RZ[] = "velocity.rz";
+
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_FX[] = "external_effort.fx";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_FY[] = "external_effort.fy";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_FZ[] = "external_effort.fz";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_TX[] = "external_effort.tx";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_TY[] = "external_effort.ty";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_TZ[] = "external_effort.tz";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_GOAL_TIME[] = "external_effort.goal_time";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_INTERPOLATION_SPACE[] =
+  "external_effort.interpolation_space";
+constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_COMMAND_ID[] = "external_effort.command_id";
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -134,6 +175,25 @@ protected:
   // Joint external effort commands in Nm for the arm and N for the gripper
   std::vector<double> joint_external_effort_commands_;
 
+  // Cartesian states: x/y/z in m, rx/ry/rz in rad, forces in N, torques in Nm.
+  std::array<double, 6> cartesian_positions_{};
+  std::array<double, 6> cartesian_velocities_{};
+  std::array<double, 6> cartesian_external_efforts_{};
+
+  // Cartesian position command: x, y, z, rx, ry, rz.
+  std::array<double, 6> cartesian_position_commands_{};
+  double cartesian_position_goal_time_command_{0.0};
+  double cartesian_position_interpolation_space_command_{1.0};
+  double cartesian_position_command_id_{0.0};
+  double last_cartesian_position_command_id_{0.0};
+
+  // Cartesian external effort command: fx, fy, fz, tx, ty, tz.
+  std::array<double, 6> cartesian_external_effort_commands_{};
+  double cartesian_external_effort_goal_time_command_{0.0};
+  double cartesian_external_effort_interpolation_space_command_{1.0};
+  double cartesian_external_effort_command_id_{0.0};
+  double last_cartesian_external_effort_command_id_{0.0};
+
   // Flag to indicate the first read/write update
   bool first_update_{true};
 
@@ -150,6 +210,9 @@ protected:
   bool arm_position_mode_running_{false};
   bool arm_velocity_mode_running_{false};
   bool arm_external_effort_mode_running_{false};
+  bool cartesian_position_mode_running_{false};
+  bool cartesian_external_effort_mode_running_{false};
+
   bool gripper_position_mode_running_{false};
   bool gripper_velocity_mode_running_{false};
   bool gripper_effort_mode_running_{false};
@@ -175,6 +238,26 @@ protected:
    * @return A set of interface types
    */
   std::set<std::string> interface_types_from_list(const std::vector<std::string> & ifaces);
+
+  /**
+   * @brief Map an individual ros2_control command interface suffix to a logical command mode.
+   */
+  std::string command_mode_from_interface_type(const std::string & type) const;
+
+  /**
+   * @brief Check whether a logical command mode is included in a stop-interface list.
+   */
+  bool interface_mode_in_stop(
+    const std::vector<std::string> & stop_interfaces,
+    const std::string & mode);
+
+  bool has_prefix(const std::string & value, const std::string & prefix) const;
+
+  bool is_new_command(double command_id, double last_command_id) const;
+
+  bool all_finite(const std::array<double, 6> & values) const;
+
+  trossen_arm::InterpolationSpace interpolation_space_from_command(double value) const;
 };
 
 }  // namespace trossen_arm_hardware

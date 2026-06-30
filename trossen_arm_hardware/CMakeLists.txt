@@ -8,8 +8,11 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 
-include_directories(
-  include
+set(ROS_DEPENDENCIES
+  hardware_interface
+  pluginlib
+  rclcpp
+  rclcpp_lifecycle
 )
 
 add_library(${PROJECT_NAME} SHARED
