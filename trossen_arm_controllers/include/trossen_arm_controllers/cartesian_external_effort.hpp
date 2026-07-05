@@ -14,7 +14,7 @@
 #include "rclcpp/subscription.hpp"
 #include "rclcpp_lifecycle/state.hpp"
 #include "realtime_tools/realtime_buffer.hpp"
-#include "geometry_msgs/msg/wrench_stamped.hpp"
+#include "trossen_arm_msgs/msg/cartesian_wrench_command.hpp"
 #include "trossen_arm_hardware/interface.hpp"
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -51,18 +51,14 @@ private:
     double value,
     const rclcpp::Logger & logger);
 
-  void command_callback(const geometry_msgs::msg::WrenchStamped::SharedPtr msg);
+  void command_callback(const trossen_arm_msgs::msg::CartesianWrenchCommand::SharedPtr msg);
 
   std::string cartesian_interface_name_{trossen_arm_hardware::CARTESIAN_COMPONENT_NAME};
-  std::string interpolation_space_name_{"cartesian"};
-  double goal_time_{0.0};
-  double interpolation_space_command_value_{1.0};
-
   realtime_tools::RealtimeBuffer<Command> command_buffer_;
   std::atomic<uint64_t> next_command_id_{0};
   uint64_t last_command_id_{0};
 
-  rclcpp::Subscription<geometry_msgs::msg::WrenchStamped>::SharedPtr command_subscriber_;
+  rclcpp::Subscription<trossen_arm_msgs::msg::CartesianWrenchCommand>::SharedPtr command_subscriber_;
 };
 
 }  // namespace trossen_arm_controllers

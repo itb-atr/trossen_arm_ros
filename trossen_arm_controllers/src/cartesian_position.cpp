@@ -14,7 +14,8 @@
 namespace
 {
 
-bool pose_stamped_values_are_finite(const geometry_msgs::msg::PoseStamped & msg)
+bool cartesian_pose_command_values_are_finite(
+  const trossen_arm_msgs::msg::CartesianPoseCommand & msg)
 {
   return std::isfinite(msg.pose.position.x) &&
          std::isfinite(msg.pose.position.y) &&
@@ -22,7 +23,8 @@ bool pose_stamped_values_are_finite(const geometry_msgs::msg::PoseStamped & msg)
          std::isfinite(msg.pose.orientation.x) &&
          std::isfinite(msg.pose.orientation.y) &&
          std::isfinite(msg.pose.orientation.z) &&
-         std::isfinite(msg.pose.orientation.w);
+         std::isfinite(msg.pose.orientation.w) &&
+         std::isfinite(msg.goal_time);
 }
 
 bool quaternion_to_rpy(
@@ -68,8 +70,6 @@ CallbackReturn CartesianPositionController::on_init()
 {
   try {
     auto_declare<std::string>("cartesian_interface_name", trossen_arm_hardware::CARTESIAN_COMPONENT_NAME);
-    auto_declare<std::string>("interpolation_space", "cartesian");
-    auto_declare<double>("goal_time", 2.0);
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_node()->get_logger(), "Failed to declare parameters: %s", e.what());
     return CallbackReturn::ERROR;
@@ -83,8 +83,6 @@ CallbackReturn CartesianPositionController::on_configure(
 {
   try {
     cartesian_interface_name_ = get_node()->get_parameter("cartesian_interface_name").as_string();
-    interpolation_space_name_ = get_node()->get_parameter("interpolation_space").as_string();
-    goal_time_ = get_node()->get_parameter("goal_time").as_double();
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_node()->get_logger(), "Failed to read parameters: %s", e.what());
     return CallbackReturn::ERROR;
@@ -95,27 +93,13 @@ CallbackReturn CartesianPositionController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  if (!std::isfinite(goal_time_) || goal_time_ < 0.0) {
-    RCLCPP_ERROR(get_node()->get_logger(), "Parameter 'goal_time' must be finite and >= 0.0.");
-    return CallbackReturn::ERROR;
-  }
-
-  interpolation_space_command_value_ = interpolation_space_to_command_value(interpolation_space_name_);
-  if (interpolation_space_command_value_ < 0.0) {
-    RCLCPP_ERROR(
-      get_node()->get_logger(),
-      "Parameter 'interpolation_space' must be either 'joint' or 'cartesian'. Got '%s'.",
-      interpolation_space_name_.c_str());
-    return CallbackReturn::ERROR;
-  }
-
-  command_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::PoseStamped>(
+  command_subscriber_ = get_node()->create_subscription<trossen_arm_msgs::msg::CartesianPoseCommand>(
     "~/command", rclcpp::SystemDefaultsQoS(),
     std::bind(&CartesianPositionController::command_callback, this, std::placeholders::_1));
 
   RCLCPP_INFO(
     get_node()->get_logger(),
-    "Configured Cartesian position controller. Publish geometry_msgs/msg/PoseStamped to '~/command'.");
+    "Configured Cartesian position controller. Publish trossen_arm_msgs/msg/CartesianPoseCommand to '~/command'.");
 
   return CallbackReturn::SUCCESS;
 }
@@ -184,16 +168,16 @@ controller_interface::return_type CartesianPositionController::update(
 }
 
 void CartesianPositionController::command_callback(
-  const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+  const trossen_arm_msgs::msg::CartesianPoseCommand::SharedPtr msg)
 {
-  if (!pose_stamped_values_are_finite(*msg)) {
-    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian position PoseStamped contains a non-finite value.");
+  if (!cartesian_pose_command_values_are_finite(*msg)) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian pose command contains a non-finite value.");
     return;
   }
 
   std::array<double, 3> rpy{};
   if (!quaternion_to_rpy(msg->pose.orientation, rpy)) {
-    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian position PoseStamped contains an invalid orientation quaternion.");
+    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian pose command contains an invalid orientation quaternion.");
     return;
   }
 
@@ -205,8 +189,22 @@ void CartesianPositionController::command_callback(
   command.pose[4] = rpy[1];
   command.pose[5] = rpy[2];
 
-  command.goal_time = goal_time_;
-  command.interpolation_space = interpolation_space_command_value_;
+  if (msg->goal_time < 0.0) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian pose command goal_time must be >= 0.0.");
+    return;
+  }
+
+  const double interpolation_space_command_value = interpolation_space_to_command_value(msg->interpolation_space);
+  if (interpolation_space_command_value < 0.0) {
+    RCLCPP_ERROR(
+      get_node()->get_logger(),
+      "Cartesian pose command interpolation_space must be either 'joint' or 'cartesian'. Got '%s'.",
+      msg->interpolation_space.c_str());
+    return;
+  }
+
+  command.goal_time = msg->goal_time;
+  command.interpolation_space = interpolation_space_command_value;
   command.id = ++next_command_id_;
   command_buffer_.writeFromNonRT(command);
 }

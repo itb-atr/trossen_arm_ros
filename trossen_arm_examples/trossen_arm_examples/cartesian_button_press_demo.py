@@ -1,7 +1,7 @@
 import time
 
 from control_msgs.msg import DynamicJointState
-from geometry_msgs.msg import PoseStamped, WrenchStamped
+from trossen_arm_msgs.msg import CartesianPoseCommand, CartesianWrenchCommand
 import rclpy
 from rclpy.node import Node
 
@@ -11,8 +11,8 @@ from trossen_arm_examples.message_helpers import (
     get_bool_parameter,
     get_float_array_parameter,
     get_string_parameter,
-    make_pose_stamped,
-    make_wrench_stamped,
+    make_cartesian_pose_command,
+    make_cartesian_wrench_command,
 )
 
 
@@ -24,6 +24,10 @@ class CartesianButtonPressDemo(Node):
         declare_dynamic_parameter(self, 'effort_command_topic', '/cartesian_external_effort_controller/command')
         declare_dynamic_parameter(self, 'position_command_frame_id', 'base_link')
         declare_dynamic_parameter(self, 'effort_command_frame_id', 'base_link')
+        declare_dynamic_parameter(self, 'position_goal_time', 2.0)
+        declare_dynamic_parameter(self, 'effort_goal_time', 0.0)
+        declare_dynamic_parameter(self, 'position_interpolation_space', 'cartesian')
+        declare_dynamic_parameter(self, 'effort_interpolation_space', 'cartesian')
         declare_dynamic_parameter(self, 'auto_activate_controllers', False)
         declare_dynamic_parameter(self, 'controller_manager_name', '/controller_manager')
         declare_dynamic_parameter(self, 'position_controller_name', 'cartesian_position_controller')
@@ -53,6 +57,10 @@ class CartesianButtonPressDemo(Node):
         self._effort_topic = get_string_parameter(self, 'effort_command_topic')
         self._position_command_frame_id = get_string_parameter(self, 'position_command_frame_id')
         self._effort_command_frame_id = get_string_parameter(self, 'effort_command_frame_id')
+        self._position_goal_time = float(self.get_parameter('position_goal_time').value)
+        self._effort_goal_time = float(self.get_parameter('effort_goal_time').value)
+        self._position_interpolation_space = get_string_parameter(self, 'position_interpolation_space')
+        self._effort_interpolation_space = get_string_parameter(self, 'effort_interpolation_space')
         self._state_topic = get_string_parameter(self, 'state_topic')
         self._cartesian_state_name = get_string_parameter(self, 'cartesian_state_name')
         self._start_pose = get_float_array_parameter(self, 'start_pose', 6)
@@ -103,8 +111,8 @@ class CartesianButtonPressDemo(Node):
         self._latest_cartesian_velocity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._press_stop_pose = None
 
-        self._position_pub = self.create_publisher(PoseStamped, self._position_topic, 10)
-        self._effort_pub = self.create_publisher(WrenchStamped, self._effort_topic, 10)
+        self._position_pub = self.create_publisher(CartesianPoseCommand, self._position_topic, 10)
+        self._effort_pub = self.create_publisher(CartesianWrenchCommand, self._effort_topic, 10)
         self._state_sub = self.create_subscription(
             DynamicJointState,
             self._state_topic,
@@ -139,7 +147,13 @@ class CartesianButtonPressDemo(Node):
             f'{self._format_values(self._start_pose)}'
         )
         self._position_pub.publish(
-            make_pose_stamped(self, self._start_pose, self._position_command_frame_id)
+            make_cartesian_pose_command(
+                self,
+                self._start_pose,
+                self._position_command_frame_id,
+                self._position_goal_time,
+                self._position_interpolation_space,
+            )
         )
         self._sleep_with_spin(self._start_settle_sec)
         self.get_logger().info('Reached external-effort start pose.')
@@ -228,7 +242,13 @@ class CartesianButtonPressDemo(Node):
                 elapsed=elapsed,
             )
             self._effort_pub.publish(
-                make_wrench_stamped(self, effort, self._effort_command_frame_id)
+                make_cartesian_wrench_command(
+                    self,
+                    effort,
+                    self._effort_command_frame_id,
+                    self._effort_goal_time,
+                    self._effort_interpolation_space,
+                )
             )
             self._sleep_with_spin(dt)
 
@@ -265,7 +285,13 @@ class CartesianButtonPressDemo(Node):
         zero_wrench = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         for _ in range(self._zero_wrench_count):
             self._effort_pub.publish(
-                make_wrench_stamped(self, zero_wrench, self._effort_command_frame_id)
+                make_cartesian_wrench_command(
+                    self,
+                    zero_wrench,
+                    self._effort_command_frame_id,
+                    self._effort_goal_time,
+                    self._effort_interpolation_space,
+                )
             )
             self._sleep_with_spin(self._zero_wrench_dt_sec)
 
@@ -291,7 +317,13 @@ class CartesianButtonPressDemo(Node):
                 for start, goal in zip(return_start_pose, self._return_pose)
             ]
             self._position_pub.publish(
-                make_pose_stamped(self, target_pose, self._position_command_frame_id)
+                make_cartesian_pose_command(
+                    self,
+                    target_pose,
+                    self._position_command_frame_id,
+                    self._position_goal_time,
+                    self._position_interpolation_space,
+                )
             )
             self._sleep_with_spin(dt)
 

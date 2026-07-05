@@ -14,6 +14,7 @@
   <depend>trossen_arm_bringup</depend>
   <depend>trossen_arm_controllers</depend>
   <depend>trossen_arm_hardware</depend>
+  <depend>trossen_arm_msgs</depend>
   <depend>trossen_arm_moveit</depend>
 
   <export>

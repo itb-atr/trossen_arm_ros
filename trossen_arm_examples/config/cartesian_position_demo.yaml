@@ -2,6 +2,8 @@ cartesian_position_demo:
   ros__parameters:
     command_topic: /cartesian_position_controller/command
     command_frame_id: base_link
+    command_goal_time: 2.0
+    command_interpolation_space: cartesian
     auto_activate_controller: true
     controller_manager_name: /controller_manager
     controller_name: cartesian_position_controller

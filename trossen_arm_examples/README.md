@@ -73,13 +73,13 @@ ros2 launch trossen_arm_examples cartesian_position_demo.launch.py \
   step_count:=5
 ```
 
-The controller command topic now uses `geometry_msgs/msg/PoseStamped`. The example still keeps the launch/config pose as a compact six-value list:
+The controller command topic uses `trossen_arm_msgs/msg/CartesianPoseCommand`, which contains a standard `geometry_msgs/Pose` plus `goal_time` and `interpolation_space`. The example still keeps the launch/config pose as a compact six-value list:
 
 ```text
 [x, y, z, roll, pitch, yaw]
 ```
 
-The example converts that list to `PoseStamped` before publishing.
+The example converts that list to `CartesianPoseCommand` before publishing. Adjust `command_goal_time` to make each Cartesian pose command slower or faster.
 
 ## Run the button press example with bringup
 
@@ -126,7 +126,7 @@ ros2 launch trossen_arm_examples cartesian_button_press_demo.launch.py \
   press_duration_sec:=10.0
 ```
 
-The external-effort controller command topic now uses `geometry_msgs/msg/WrenchStamped`. The example computes the six effort values and publishes them as:
+The external-effort controller command topic uses `trossen_arm_msgs/msg/CartesianWrenchCommand`, which contains a standard `geometry_msgs/Wrench` plus `goal_time` and `interpolation_space`. The example computes the six effort values and publishes them as:
 
 ```text
 wrench.force:  [fx, fy, fz]
@@ -143,7 +143,7 @@ damping:        [dx, dy, dz, drx, dry, drz]
 ```
 
 Use conservative force values first and verify the tool frame direction before
-testing against a real button or touch screen.
+testing against a real button or touch screen. Adjust `effort_goal_time` to control how quickly the native driver interpolates each external-effort command.
 
 The impedance loop depends on `joint_state_broadcaster` publishing Cartesian
 position and velocity on `/dynamic_joint_states` under the `cartesian` state

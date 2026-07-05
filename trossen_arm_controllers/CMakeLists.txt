@@ -10,6 +10,7 @@ find_package(realtime_tools REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(trossen_arm_hardware REQUIRED)
+find_package(trossen_arm_msgs REQUIRED)
 
 set(ROS_DEPENDENCIES
   controller_interface::controller_interface
@@ -18,6 +19,7 @@ set(ROS_DEPENDENCIES
   rclcpp::rclcpp
   trossen_arm_hardware::trossen_arm_hardware
   realtime_tools::realtime_tools
+  ${trossen_arm_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
   ${std_srvs_TARGETS}
 )

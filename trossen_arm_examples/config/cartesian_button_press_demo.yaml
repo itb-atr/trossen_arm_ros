@@ -4,6 +4,10 @@ cartesian_button_press_demo:
     effort_command_topic: /cartesian_external_effort_controller/command
     position_command_frame_id: base_link
     effort_command_frame_id: base_link
+    position_goal_time: 2.0
+    effort_goal_time: 0.0
+    position_interpolation_space: cartesian
+    effort_interpolation_space: cartesian
     auto_activate_controllers: true
     controller_manager_name: /controller_manager
     position_controller_name: cartesian_position_controller

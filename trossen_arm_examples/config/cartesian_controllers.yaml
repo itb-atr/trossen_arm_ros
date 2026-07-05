@@ -14,11 +14,7 @@ controller_manager:
 cartesian_position_controller:
   ros__parameters:
     cartesian_interface_name: cartesian
-    interpolation_space: cartesian
-    goal_time: 2.0
 
 cartesian_external_effort_controller:
   ros__parameters:
     cartesian_interface_name: cartesian
-    interpolation_space: cartesian
-    goal_time: 0.0

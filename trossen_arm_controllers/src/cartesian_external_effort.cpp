@@ -13,14 +13,16 @@
 namespace
 {
 
-bool wrench_stamped_values_are_finite(const geometry_msgs::msg::WrenchStamped & msg)
+bool cartesian_wrench_command_values_are_finite(
+  const trossen_arm_msgs::msg::CartesianWrenchCommand & msg)
 {
   return std::isfinite(msg.wrench.force.x) &&
          std::isfinite(msg.wrench.force.y) &&
          std::isfinite(msg.wrench.force.z) &&
          std::isfinite(msg.wrench.torque.x) &&
          std::isfinite(msg.wrench.torque.y) &&
-         std::isfinite(msg.wrench.torque.z);
+         std::isfinite(msg.wrench.torque.z) &&
+         std::isfinite(msg.goal_time);
 }
 
 }  // namespace
@@ -32,8 +34,6 @@ CallbackReturn CartesianExternalEffortController::on_init()
 {
   try {
     auto_declare<std::string>("cartesian_interface_name", trossen_arm_hardware::CARTESIAN_COMPONENT_NAME);
-    auto_declare<std::string>("interpolation_space", "cartesian");
-    auto_declare<double>("goal_time", 0.0);
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_node()->get_logger(), "Failed to declare parameters: %s", e.what());
     return CallbackReturn::ERROR;
@@ -47,8 +47,6 @@ CallbackReturn CartesianExternalEffortController::on_configure(
 {
   try {
     cartesian_interface_name_ = get_node()->get_parameter("cartesian_interface_name").as_string();
-    interpolation_space_name_ = get_node()->get_parameter("interpolation_space").as_string();
-    goal_time_ = get_node()->get_parameter("goal_time").as_double();
   } catch (const std::exception & e) {
     RCLCPP_ERROR(get_node()->get_logger(), "Failed to read parameters: %s", e.what());
     return CallbackReturn::ERROR;
@@ -59,27 +57,13 @@ CallbackReturn CartesianExternalEffortController::on_configure(
     return CallbackReturn::ERROR;
   }
 
-  if (!std::isfinite(goal_time_) || goal_time_ < 0.0) {
-    RCLCPP_ERROR(get_node()->get_logger(), "Parameter 'goal_time' must be finite and >= 0.0.");
-    return CallbackReturn::ERROR;
-  }
-
-  interpolation_space_command_value_ = interpolation_space_to_command_value(interpolation_space_name_);
-  if (interpolation_space_command_value_ < 0.0) {
-    RCLCPP_ERROR(
-      get_node()->get_logger(),
-      "Parameter 'interpolation_space' must be either 'joint' or 'cartesian'. Got '%s'.",
-      interpolation_space_name_.c_str());
-    return CallbackReturn::ERROR;
-  }
-
-  command_subscriber_ = get_node()->create_subscription<geometry_msgs::msg::WrenchStamped>(
+  command_subscriber_ = get_node()->create_subscription<trossen_arm_msgs::msg::CartesianWrenchCommand>(
     "~/command", rclcpp::SystemDefaultsQoS(),
     std::bind(&CartesianExternalEffortController::command_callback, this, std::placeholders::_1));
 
   RCLCPP_INFO(
     get_node()->get_logger(),
-    "Configured Cartesian external effort controller. Publish geometry_msgs/msg/WrenchStamped to '~/command'.");
+    "Configured Cartesian external effort controller. Publish trossen_arm_msgs/msg/CartesianWrenchCommand to '~/command'.");
 
   return CallbackReturn::SUCCESS;
 }
@@ -148,10 +132,10 @@ controller_interface::return_type CartesianExternalEffortController::update(
 }
 
 void CartesianExternalEffortController::command_callback(
-  const geometry_msgs::msg::WrenchStamped::SharedPtr msg)
+  const trossen_arm_msgs::msg::CartesianWrenchCommand::SharedPtr msg)
 {
-  if (!wrench_stamped_values_are_finite(*msg)) {
-    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian external effort WrenchStamped contains a non-finite value.");
+  if (!cartesian_wrench_command_values_are_finite(*msg)) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian wrench command contains a non-finite value.");
     return;
   }
 
@@ -163,8 +147,22 @@ void CartesianExternalEffortController::command_callback(
   command.wrench[4] = msg->wrench.torque.y;
   command.wrench[5] = msg->wrench.torque.z;
 
-  command.goal_time = goal_time_;
-  command.interpolation_space = interpolation_space_command_value_;
+  if (msg->goal_time < 0.0) {
+    RCLCPP_ERROR(get_node()->get_logger(), "Cartesian wrench command goal_time must be >= 0.0.");
+    return;
+  }
+
+  const double interpolation_space_command_value = interpolation_space_to_command_value(msg->interpolation_space);
+  if (interpolation_space_command_value < 0.0) {
+    RCLCPP_ERROR(
+      get_node()->get_logger(),
+      "Cartesian wrench command interpolation_space must be either 'joint' or 'cartesian'. Got '%s'.",
+      msg->interpolation_space.c_str());
+    return;
+  }
+
+  command.goal_time = msg->goal_time;
+  command.interpolation_space = interpolation_space_command_value;
   command.id = ++next_command_id_;
   command_buffer_.writeFromNonRT(command);
 }

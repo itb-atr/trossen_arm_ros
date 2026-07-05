@@ -2,9 +2,9 @@ import ast
 import math
 from collections.abc import Sequence
 
-from geometry_msgs.msg import PoseStamped, WrenchStamped
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
+from trossen_arm_msgs.msg import CartesianPoseCommand, CartesianWrenchCommand
 
 
 def declare_dynamic_parameter(node: Node, name: str, default_value):
@@ -37,16 +37,24 @@ def get_bool_parameter(node: Node, name: str) -> bool:
     return bool(value)
 
 
-def make_pose_stamped(node: Node, values: Sequence[float], frame_id: str) -> PoseStamped:
+def make_cartesian_pose_command(
+    node: Node,
+    values: Sequence[float],
+    frame_id: str,
+    goal_time: float,
+    interpolation_space: str,
+) -> CartesianPoseCommand:
     if len(values) != 6:
         raise ValueError('Pose command must contain exactly 6 values: [x, y, z, roll, pitch, yaw].')
 
-    msg = PoseStamped()
+    msg = CartesianPoseCommand()
     msg.header.stamp = node.get_clock().now().to_msg()
     msg.header.frame_id = frame_id
     msg.pose.position.x = float(values[0])
     msg.pose.position.y = float(values[1])
     msg.pose.position.z = float(values[2])
+    msg.goal_time = float(goal_time)
+    msg.interpolation_space = interpolation_space
 
     qx, qy, qz, qw = _quaternion_from_rpy(float(values[3]), float(values[4]), float(values[5]))
     msg.pose.orientation.x = qx
@@ -56,11 +64,17 @@ def make_pose_stamped(node: Node, values: Sequence[float], frame_id: str) -> Pos
     return msg
 
 
-def make_wrench_stamped(node: Node, values: Sequence[float], frame_id: str) -> WrenchStamped:
+def make_cartesian_wrench_command(
+    node: Node,
+    values: Sequence[float],
+    frame_id: str,
+    goal_time: float,
+    interpolation_space: str,
+) -> CartesianWrenchCommand:
     if len(values) != 6:
         raise ValueError('Wrench command must contain exactly 6 values: [fx, fy, fz, tx, ty, tz].')
 
-    msg = WrenchStamped()
+    msg = CartesianWrenchCommand()
     msg.header.stamp = node.get_clock().now().to_msg()
     msg.header.frame_id = frame_id
     msg.wrench.force.x = float(values[0])
@@ -69,6 +83,8 @@ def make_wrench_stamped(node: Node, values: Sequence[float], frame_id: str) -> W
     msg.wrench.torque.x = float(values[3])
     msg.wrench.torque.y = float(values[4])
     msg.wrench.torque.z = float(values[5])
+    msg.goal_time = float(goal_time)
+    msg.interpolation_space = interpolation_space
     return msg
 
 
