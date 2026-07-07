@@ -487,22 +487,48 @@ TrossenArmHardwareInterface::write(
       }
 
       if (!all_finite(cartesian_position_commands_)) {
-        RCLCPP_ERROR(get_logger(), "Cartesian position command contains a non-finite value.");
-        return return_type::ERROR;
+        RCLCPP_WARN(
+          get_logger(),
+          "Ignoring Cartesian position command %.0f because it contains a non-finite value.",
+          cartesian_position_command_id_);
+        last_cartesian_position_command_id_ = cartesian_position_command_id_;
+        return return_type::OK;
       }
 
       if (!std::isfinite(cartesian_position_goal_time_command_) ||
         cartesian_position_goal_time_command_ < 0.0)
       {
-        RCLCPP_ERROR(get_logger(), "Cartesian position goal_time must be finite and >= 0.0.");
-        return return_type::ERROR;
+        RCLCPP_WARN(
+          get_logger(),
+          "Ignoring Cartesian position command %.0f because goal_time is not finite and >= 0.0.",
+          cartesian_position_command_id_);
+        last_cartesian_position_command_id_ = cartesian_position_command_id_;
+        return return_type::OK;
       }
 
-      arm_driver_->set_cartesian_positions(
-        cartesian_position_commands_,
-        interpolation_space_from_command(cartesian_position_interpolation_space_command_),
-        cartesian_position_goal_time_command_,
-        false);
+      try {
+        arm_driver_->set_cartesian_positions(
+          cartesian_position_commands_,
+          interpolation_space_from_command(cartesian_position_interpolation_space_command_),
+          cartesian_position_goal_time_command_,
+          false);
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(
+          get_logger(),
+          "Ignoring Cartesian position command %.0f because the driver rejected it: %s. "
+          "Command was [%.6f, %.6f, %.6f, %.6f, %.6f, %.6f], goal_time %.3f.",
+          cartesian_position_command_id_,
+          e.what(),
+          cartesian_position_commands_[0],
+          cartesian_position_commands_[1],
+          cartesian_position_commands_[2],
+          cartesian_position_commands_[3],
+          cartesian_position_commands_[4],
+          cartesian_position_commands_[5],
+          cartesian_position_goal_time_command_);
+        last_cartesian_position_command_id_ = cartesian_position_command_id_;
+        return return_type::OK;
+      }
       last_cartesian_position_command_id_ = cartesian_position_command_id_;
     } else if (cartesian_external_effort_mode_running_) {
       if (!is_new_command(
@@ -512,22 +538,48 @@ TrossenArmHardwareInterface::write(
       }
 
       if (!all_finite(cartesian_external_effort_commands_)) {
-        RCLCPP_ERROR(get_logger(), "Cartesian external effort command contains a non-finite value.");
-        return return_type::ERROR;
+        RCLCPP_WARN(
+          get_logger(),
+          "Ignoring Cartesian external effort command %.0f because it contains a non-finite value.",
+          cartesian_external_effort_command_id_);
+        last_cartesian_external_effort_command_id_ = cartesian_external_effort_command_id_;
+        return return_type::OK;
       }
 
       if (!std::isfinite(cartesian_external_effort_goal_time_command_) ||
         cartesian_external_effort_goal_time_command_ < 0.0)
       {
-        RCLCPP_ERROR(get_logger(), "Cartesian external effort goal_time must be finite and >= 0.0.");
-        return return_type::ERROR;
+        RCLCPP_WARN(
+          get_logger(),
+          "Ignoring Cartesian external effort command %.0f because goal_time is not finite and >= 0.0.",
+          cartesian_external_effort_command_id_);
+        last_cartesian_external_effort_command_id_ = cartesian_external_effort_command_id_;
+        return return_type::OK;
       }
 
-      arm_driver_->set_cartesian_external_efforts(
-        cartesian_external_effort_commands_,
-        interpolation_space_from_command(cartesian_external_effort_interpolation_space_command_),
-        cartesian_external_effort_goal_time_command_,
-        false);
+      try {
+        arm_driver_->set_cartesian_external_efforts(
+          cartesian_external_effort_commands_,
+          interpolation_space_from_command(cartesian_external_effort_interpolation_space_command_),
+          cartesian_external_effort_goal_time_command_,
+          false);
+      } catch (const std::exception & e) {
+        RCLCPP_ERROR(
+          get_logger(),
+          "Ignoring Cartesian external effort command %.0f because the driver rejected it: %s. "
+          "Command was [%.6f, %.6f, %.6f, %.6f, %.6f, %.6f], goal_time %.3f.",
+          cartesian_external_effort_command_id_,
+          e.what(),
+          cartesian_external_effort_commands_[0],
+          cartesian_external_effort_commands_[1],
+          cartesian_external_effort_commands_[2],
+          cartesian_external_effort_commands_[3],
+          cartesian_external_effort_commands_[4],
+          cartesian_external_effort_commands_[5],
+          cartesian_external_effort_goal_time_command_);
+        last_cartesian_external_effort_command_id_ = cartesian_external_effort_command_id_;
+        return return_type::OK;
+      }
       last_cartesian_external_effort_command_id_ = cartesian_external_effort_command_id_;
     }
   } catch (const std::exception & e) {
