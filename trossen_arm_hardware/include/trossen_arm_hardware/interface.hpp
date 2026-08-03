@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <memory>
 #include <set>
@@ -182,12 +183,13 @@ protected:
   // Joint external effort commands in Nm for the arm and N for the gripper
   std::vector<double> joint_external_effort_commands_;
 
-  // Cartesian states: x/y/z in m, rx/ry/rz in rad, forces in N, torques in Nm.
+  // Cartesian states: x/y/z in m, angle-axis rotation vector in rad,
+  // forces in N, and torques in Nm.
   std::array<double, 6> cartesian_positions_{};
   std::array<double, 6> cartesian_velocities_{};
   std::array<double, 6> cartesian_external_efforts_{};
 
-  // Cartesian position command: x, y, z, rx, ry, rz.
+  // Cartesian position command: x/y/z followed by an angle-axis rotation vector.
   std::array<double, 6> cartesian_position_commands_{};
   double cartesian_position_goal_time_command_{0.0};
   double cartesian_position_interpolation_space_command_{1.0};
@@ -206,10 +208,23 @@ protected:
   double emergency_stop_command_id_{0.0};
   double last_emergency_stop_command_id_{0.0};
   bool emergency_stop_engaged_{false};
-  bool normal_commands_suspended_after_emergency_stop_{false};
+  bool arm_commands_suspended_after_emergency_stop_{false};
+  bool gripper_commands_suspended_after_emergency_stop_{false};
 
   // Flag to indicate the first read/write update
   bool first_update_{true};
+
+  // The Trossen driver orders all arm joints first and the gripper joint last.
+  // Keep the ros2_control resources split into those two independently
+  // switchable command groups.
+  size_t arm_joint_count_{0};
+  size_t gripper_joint_index_{0};
+  std::string gripper_joint_name_;
+
+  // Scratch buffers used to call the arm-only driver APIs without allocating
+  // in every write cycle.
+  std::vector<double> arm_position_command_buffer_;
+  std::vector<double> arm_external_effort_command_buffer_;
 
   const size_t COUNT_COMMAND_INTERFACES_ = 3;  // position, velocity, external effort
   const size_t INDEX_COMMAND_INTERFACE_POSITION_ = 0;
@@ -230,7 +245,28 @@ protected:
 
   bool gripper_position_mode_running_{false};
   bool gripper_velocity_mode_running_{false};
-  bool gripper_effort_mode_running_{false};
+  bool gripper_external_effort_mode_running_{false};
+
+  enum class CommandGroup
+  {
+    arm,
+    gripper,
+    emergency_stop,
+    unsupported
+  };
+
+  struct ParsedCommandInterface
+  {
+    CommandGroup group{CommandGroup::unsupported};
+    std::string mode;
+  };
+
+  struct CommandModeSelection
+  {
+    std::set<std::string> arm_modes;
+    std::set<std::string> gripper_modes;
+    bool emergency_stop{false};
+  };
 
   return_type engage_emergency_stop();
 
@@ -240,35 +276,29 @@ protected:
   rclcpp::Logger get_logger() const override;
 
   /**
-   * @brief Check if the interface type is in the stop interfaces
-   *
-   * @param stop_interfaces The interfaces to stop
-   * @param type The interface type to check
-   * @return true if the interface type is in the stop interfaces, false otherwise
-   */
-  bool interface_type_in_stop(
-    const std::vector<std::string> & stop_interfaces,
-    const std::string & type);
-
-  /**
-   * @brief Extract the interface types from a list of interfaces
-   *
-   * @param ifaces The list of interfaces
-   * @return A set of interface types
-   */
-  std::set<std::string> interface_types_from_list(const std::vector<std::string> & ifaces);
-
-  /**
    * @brief Map an individual ros2_control command interface suffix to a logical command mode.
    */
   std::string command_mode_from_interface_type(const std::string & type) const;
 
-  /**
-   * @brief Check whether a logical command mode is included in a stop-interface list.
-   */
-  bool interface_mode_in_stop(
-    const std::vector<std::string> & stop_interfaces,
-    const std::string & mode);
+  ParsedCommandInterface parse_command_interface(const std::string & interface_name) const;
+
+  bool command_modes_from_list(
+    const std::vector<std::string> & interfaces,
+    CommandModeSelection & selection) const;
+
+  std::string active_arm_mode() const;
+
+  std::string active_gripper_mode() const;
+
+  bool arm_mode_running() const;
+
+  bool gripper_mode_running() const;
+
+  void stage_current_arm_position_hold();
+
+  void apply_safe_arm_driver_mode(const std::string & logical_mode);
+
+  void apply_safe_gripper_driver_mode(const std::string & logical_mode);
 
   bool has_prefix(const std::string & value, const std::string & prefix) const;
 

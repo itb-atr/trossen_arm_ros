@@ -40,7 +40,8 @@ public:
 private:
   struct Command
   {
-    std::array<double, 6> pose{};  // x, y, z, roll, pitch, yaw; meters and radians.
+    // x, y, z followed by an angle-axis rotation vector; meters and radians.
+    std::array<double, 6> pose{};
     double goal_time{0.0};
     double interpolation_space{1.0};  // 0.0 = joint, 1.0 = cartesian.
     uint64_t id{0};

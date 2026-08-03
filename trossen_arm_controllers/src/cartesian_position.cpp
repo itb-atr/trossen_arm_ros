@@ -27,9 +27,9 @@ bool cartesian_pose_command_values_are_finite(
          std::isfinite(msg.goal_time);
 }
 
-bool quaternion_to_rpy(
+bool quaternion_to_rotation_vector(
   const geometry_msgs::msg::Quaternion & quaternion,
-  std::array<double, 3> & rpy)
+  std::array<double, 3> & rotation_vector)
 {
   double x = quaternion.x;
   double y = quaternion.y;
@@ -46,19 +46,32 @@ bool quaternion_to_rpy(
   z /= norm;
   w /= norm;
 
-  const double sinr_cosp = 2.0 * ((w * x) + (y * z));
-  const double cosr_cosp = 1.0 - (2.0 * ((x * x) + (y * y)));
-  rpy[0] = std::atan2(sinr_cosp, cosr_cosp);
+  // q and -q encode the same orientation. Select the representation with a
+  // non-negative scalar part so the resulting angle-axis vector follows the
+  // shortest rotation (angle in [0, pi]).
+  if (w < 0.0) {
+    x = -x;
+    y = -y;
+    z = -z;
+    w = -w;
+  }
 
-  const double sinp = 2.0 * ((w * y) - (z * x));
-  const double clamped_sinp = std::max(-1.0, std::min(1.0, sinp));
-  rpy[1] = std::asin(clamped_sinp);
+  const double vector_norm = std::sqrt((x * x) + (y * y) + (z * z));
+  if (vector_norm < 1e-12) {
+    rotation_vector = {0.0, 0.0, 0.0};
+    return true;
+  }
 
-  const double siny_cosp = 2.0 * ((w * z) + (x * y));
-  const double cosy_cosp = 1.0 - (2.0 * ((y * y) + (z * z)));
-  rpy[2] = std::atan2(siny_cosp, cosy_cosp);
+  const double clamped_w = std::max(-1.0, std::min(1.0, w));
+  const double angle = 2.0 * std::atan2(vector_norm, clamped_w);
+  const double scale = angle / vector_norm;
+  rotation_vector[0] = x * scale;
+  rotation_vector[1] = y * scale;
+  rotation_vector[2] = z * scale;
 
-  return std::isfinite(rpy[0]) && std::isfinite(rpy[1]) && std::isfinite(rpy[2]);
+  return std::isfinite(rotation_vector[0]) &&
+         std::isfinite(rotation_vector[1]) &&
+         std::isfinite(rotation_vector[2]);
 }
 
 }  // namespace
@@ -175,8 +188,8 @@ void CartesianPositionController::command_callback(
     return;
   }
 
-  std::array<double, 3> rpy{};
-  if (!quaternion_to_rpy(msg->pose.orientation, rpy)) {
+  std::array<double, 3> rotation_vector{};
+  if (!quaternion_to_rotation_vector(msg->pose.orientation, rotation_vector)) {
     RCLCPP_ERROR(get_node()->get_logger(), "Cartesian pose command contains an invalid orientation quaternion.");
     return;
   }
@@ -185,9 +198,9 @@ void CartesianPositionController::command_callback(
   command.pose[0] = msg->pose.position.x;
   command.pose[1] = msg->pose.position.y;
   command.pose[2] = msg->pose.position.z;
-  command.pose[3] = rpy[0];
-  command.pose[4] = rpy[1];
-  command.pose[5] = rpy[2];
+  command.pose[3] = rotation_vector[0];
+  command.pose[4] = rotation_vector[1];
+  command.pose[5] = rotation_vector[2];
 
   if (msg->goal_time < 0.0) {
     RCLCPP_ERROR(get_node()->get_logger(), "Cartesian pose command goal_time must be >= 0.0.");
