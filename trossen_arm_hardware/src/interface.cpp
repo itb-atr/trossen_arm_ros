@@ -28,8 +28,58 @@
 
 #include "trossen_arm_hardware/interface.hpp"
 
+#include <chrono>
+#include <thread>
+
 namespace trossen_arm_hardware
 {
+
+namespace
+{
+
+constexpr auto DRIVER_MODE_SWITCH_TIMEOUT = std::chrono::milliseconds(500);
+constexpr auto DRIVER_MODE_POLL_INTERVAL = std::chrono::milliseconds(2);
+
+/**
+ * @brief Wait until the requested mode is reported for a contiguous group of joints.
+ */
+void wait_for_driver_mode(
+  TrossenArmDriver & arm_driver,
+  size_t first_joint_index,
+  size_t joint_count,
+  trossen_arm::Mode expected_mode,
+  const char * group_name,
+  const char * mode_name)
+{
+  const auto deadline = std::chrono::steady_clock::now() + DRIVER_MODE_SWITCH_TIMEOUT;
+
+  while (true) {
+    const auto modes = arm_driver.get_modes();
+    if (modes.size() < first_joint_index + joint_count) {
+      throw std::runtime_error(
+              std::string("Driver returned too few joint modes while switching the ") +
+              group_name + ".");
+    }
+
+    if (std::all_of(
+        modes.begin() + first_joint_index,
+        modes.begin() + first_joint_index + joint_count,
+        [expected_mode](trossen_arm::Mode mode) {return mode == expected_mode;}))
+    {
+      return;
+    }
+
+    if (std::chrono::steady_clock::now() >= deadline) {
+      throw std::runtime_error(
+              std::string("Timed out waiting for the ") + group_name + " to enter " +
+              mode_name + " mode.");
+    }
+
+    std::this_thread::sleep_for(DRIVER_MODE_POLL_INTERVAL);
+  }
+}
+
+}  // namespace
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
 
@@ -838,25 +888,31 @@ TrossenArmHardwareInterface::perform_command_mode_switch(
       if (requested_mode == HW_IF_POSITION) {
         std::copy_n(
           joint_positions_.begin(), arm_joint_count_, joint_position_commands_.begin());
-        arm_position_mode_running_ = true;
       } else if (requested_mode == HW_IF_EXTERNAL_EFFORT) {
         std::fill_n(joint_external_effort_commands_.begin(), arm_joint_count_, 0.0);
-        arm_external_effort_mode_running_ = true;
       } else if (requested_mode == HW_IF_CARTESIAN_POSITION) {
         cartesian_position_commands_ = cartesian_positions_;
         last_cartesian_position_command_id_ = cartesian_position_command_id_;
-        cartesian_position_mode_running_ = true;
       } else if (requested_mode == HW_IF_CARTESIAN_EXTERNAL_EFFORT) {
         cartesian_external_effort_commands_.fill(0.0);
         last_cartesian_external_effort_command_id_ =
           cartesian_external_effort_command_id_;
-        cartesian_external_effort_mode_running_ = true;
       }
 
       if (!emergency_stop_engaged_) {
         arm_driver_mode_may_have_changed = true;
         apply_safe_arm_driver_mode(requested_mode);
         arm_commands_suspended_after_emergency_stop_ = false;
+      }
+
+      if (requested_mode == HW_IF_POSITION) {
+        arm_position_mode_running_ = true;
+      } else if (requested_mode == HW_IF_EXTERNAL_EFFORT) {
+        arm_external_effort_mode_running_ = true;
+      } else if (requested_mode == HW_IF_CARTESIAN_POSITION) {
+        cartesian_position_mode_running_ = true;
+      } else if (requested_mode == HW_IF_CARTESIAN_EXTERNAL_EFFORT) {
+        cartesian_external_effort_mode_running_ = true;
       }
 
       if (requested_mode == HW_IF_POSITION) {
@@ -885,16 +941,20 @@ TrossenArmHardwareInterface::perform_command_mode_switch(
       if (requested_mode == HW_IF_POSITION) {
         joint_position_commands_[gripper_joint_index_] =
           joint_positions_[gripper_joint_index_];
-        gripper_position_mode_running_ = true;
       } else if (requested_mode == HW_IF_EXTERNAL_EFFORT) {
         joint_external_effort_commands_[gripper_joint_index_] = 0.0;
-        gripper_external_effort_mode_running_ = true;
       }
 
       if (!emergency_stop_engaged_) {
         gripper_driver_mode_may_have_changed = true;
         apply_safe_gripper_driver_mode(requested_mode);
         gripper_commands_suspended_after_emergency_stop_ = false;
+      }
+
+      if (requested_mode == HW_IF_POSITION) {
+        gripper_position_mode_running_ = true;
+      } else if (requested_mode == HW_IF_EXTERNAL_EFFORT) {
+        gripper_external_effort_mode_running_ = true;
       }
 
       if (requested_mode == HW_IF_POSITION) {
@@ -1157,12 +1217,17 @@ void TrossenArmHardwareInterface::apply_safe_arm_driver_mode(
 {
   if (logical_mode.empty()) {
     arm_driver_->set_arm_modes(trossen_arm::Mode::idle);
+    wait_for_driver_mode(
+      *arm_driver_, 0, arm_joint_count_, trossen_arm::Mode::idle, "arm group", "idle");
     return;
   }
 
   if (logical_mode == HW_IF_POSITION || logical_mode == HW_IF_CARTESIAN_POSITION) {
     stage_current_arm_position_hold();
     arm_driver_->set_arm_modes(trossen_arm::Mode::position);
+    wait_for_driver_mode(
+      *arm_driver_, 0, arm_joint_count_, trossen_arm::Mode::position,
+      "arm group", "position");
     arm_driver_->set_arm_positions(arm_position_command_buffer_, 0.0, false);
     return;
   }
@@ -1176,6 +1241,9 @@ void TrossenArmHardwareInterface::apply_safe_arm_driver_mode(
       0.0);
     std::fill_n(joint_external_effort_commands_.begin(), arm_joint_count_, 0.0);
     arm_driver_->set_arm_modes(trossen_arm::Mode::external_effort);
+    wait_for_driver_mode(
+      *arm_driver_, 0, arm_joint_count_, trossen_arm::Mode::external_effort,
+      "arm group", "external effort");
     arm_driver_->set_arm_external_efforts(
       arm_external_effort_command_buffer_, 0.0, false);
     return;
@@ -1189,6 +1257,9 @@ void TrossenArmHardwareInterface::apply_safe_gripper_driver_mode(
 {
   if (logical_mode.empty()) {
     arm_driver_->set_gripper_mode(trossen_arm::Mode::idle);
+    wait_for_driver_mode(
+      *arm_driver_, gripper_joint_index_, 1, trossen_arm::Mode::idle,
+      "gripper group", "idle");
     return;
   }
 
@@ -1200,6 +1271,9 @@ void TrossenArmHardwareInterface::apply_safe_gripper_driver_mode(
     }
     joint_position_commands_[gripper_joint_index_] = position;
     arm_driver_->set_gripper_mode(trossen_arm::Mode::position);
+    wait_for_driver_mode(
+      *arm_driver_, gripper_joint_index_, 1, trossen_arm::Mode::position,
+      "gripper group", "position");
     arm_driver_->set_gripper_position(position, 0.0, false);
     return;
   }
@@ -1207,6 +1281,9 @@ void TrossenArmHardwareInterface::apply_safe_gripper_driver_mode(
   if (logical_mode == HW_IF_EXTERNAL_EFFORT) {
     joint_external_effort_commands_[gripper_joint_index_] = 0.0;
     arm_driver_->set_gripper_mode(trossen_arm::Mode::external_effort);
+    wait_for_driver_mode(
+      *arm_driver_, gripper_joint_index_, 1, trossen_arm::Mode::external_effort,
+      "gripper group", "external effort");
     arm_driver_->set_gripper_external_effort(0.0, 0.0, false);
     return;
   }
