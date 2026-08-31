@@ -1,0 +1,9 @@
+trossen_arm_recovery:
+  ros__parameters:
+    controller_manager: /controller_manager
+    hardware_component: TrossenArmHardwareInterface
+    service_timeout: 5.0
+    default_controllers:
+      - joint_state_broadcaster
+      - arm_controller
+      - gripper_controller

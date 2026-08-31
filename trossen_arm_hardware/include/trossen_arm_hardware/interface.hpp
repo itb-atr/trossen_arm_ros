@@ -134,6 +134,8 @@ public:
 
   CallbackReturn on_cleanup(const rclcpp_lifecycle::State & previous_state) override;
 
+  CallbackReturn on_error(const rclcpp_lifecycle::State & previous_state) override;
+
   return_type read(const rclcpp::Time & time, const rclcpp::Duration & duration) override;
 
   return_type write(const rclcpp::Time & time, const rclcpp::Duration & duration) override;

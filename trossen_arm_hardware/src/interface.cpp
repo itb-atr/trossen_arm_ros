@@ -1039,6 +1039,58 @@ TrossenArmHardwareInterface::on_cleanup(const rclcpp_lifecycle::State & /*previo
   return CallbackReturn::SUCCESS;
 }
 
+CallbackReturn
+TrossenArmHardwareInterface::on_error(const rclcpp_lifecycle::State & /*previous_state*/)
+{
+  RCLCPP_ERROR(
+    get_logger(),
+    "Trossen Arm hardware entered an error state. Cleaning up the driver for recovery.");
+
+  if (arm_driver_) {
+    try {
+      const auto error_information = arm_driver_->get_error_information();
+      if (!error_information.empty()) {
+        RCLCPP_ERROR(get_logger(), "Trossen Arm error information: %s", error_information.c_str());
+      }
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(
+        get_logger(),
+        "Failed to read Trossen Arm error information during recovery cleanup: %s",
+        e.what());
+    }
+
+    try {
+      arm_driver_->cleanup(false);
+    } catch (const std::exception & e) {
+      RCLCPP_WARN(
+        get_logger(),
+        "Failed to clean up TrossenArmDriver after a hardware error: %s",
+        e.what());
+    }
+  }
+
+  arm_position_mode_running_ = false;
+  arm_velocity_mode_running_ = false;
+  arm_external_effort_mode_running_ = false;
+  cartesian_position_mode_running_ = false;
+  cartesian_external_effort_mode_running_ = false;
+  emergency_stop_controller_running_ = false;
+  gripper_position_mode_running_ = false;
+  gripper_velocity_mode_running_ = false;
+  gripper_external_effort_mode_running_ = false;
+  emergency_stop_engaged_ = false;
+  arm_commands_suspended_after_emergency_stop_ = false;
+  gripper_commands_suspended_after_emergency_stop_ = false;
+  first_update_ = true;
+  robot_output_ = trossen_arm::RobotOutput();
+  arm_driver_.reset();
+
+  RCLCPP_WARN(
+    get_logger(),
+    "Trossen Arm hardware is ready to be configured again through controller_manager.");
+  return CallbackReturn::SUCCESS;
+}
+
 return_type
 TrossenArmHardwareInterface::engage_emergency_stop()
 {
