@@ -3,6 +3,7 @@ project(trossen_arm_controllers)
 
 find_package(ament_cmake REQUIRED)
 find_package(controller_interface REQUIRED)
+find_package(controller_manager_msgs REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -14,6 +15,7 @@ find_package(trossen_arm_msgs REQUIRED)
 
 set(ROS_DEPENDENCIES
   controller_interface::controller_interface
+  ${controller_manager_msgs_TARGETS}
   hardware_interface::hardware_interface
   pluginlib::pluginlib
   rclcpp::rclcpp

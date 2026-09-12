@@ -102,6 +102,7 @@ constexpr char HW_IF_CARTESIAN_EXTERNAL_EFFORT_COMMAND_ID[] = "external_effort.c
 constexpr char HW_IF_EMERGENCY_STOP_ENGAGE[] = "engage";
 constexpr char HW_IF_EMERGENCY_STOP_RELEASE[] = "release";
 constexpr char HW_IF_EMERGENCY_STOP_COMMAND_ID[] = "command_id";
+constexpr char HW_IF_EMERGENCY_STOP_ENGAGED[] = "engaged";
 
 
 using CallbackReturn = rclcpp_lifecycle::node_interfaces::LifecycleNodeInterface::CallbackReturn;
@@ -210,6 +211,7 @@ protected:
   double emergency_stop_command_id_{0.0};
   double last_emergency_stop_command_id_{0.0};
   bool emergency_stop_engaged_{false};
+  double emergency_stop_engaged_state_{0.0};
   bool arm_commands_suspended_after_emergency_stop_{false};
   bool gripper_commands_suspended_after_emergency_stop_{false};
 

@@ -206,6 +206,7 @@ TrossenArmHardwareInterface::on_init(const hardware_interface::HardwareInfo & in
   emergency_stop_command_id_ = 0.0;
   last_emergency_stop_command_id_ = 0.0;
   emergency_stop_engaged_ = false;
+  emergency_stop_engaged_state_ = 0.0;
   arm_commands_suspended_after_emergency_stop_ = false;
   gripper_commands_suspended_after_emergency_stop_ = false;
 
@@ -349,6 +350,10 @@ TrossenArmHardwareInterface::export_state_interfaces()
     CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TY, &cartesian_external_efforts_[4]);
   state_interfaces.emplace_back(
     CARTESIAN_COMPONENT_NAME, HW_IF_CARTESIAN_EXTERNAL_EFFORT_TZ, &cartesian_external_efforts_[5]);
+
+  state_interfaces.emplace_back(
+    EMERGENCY_STOP_COMPONENT_NAME, HW_IF_EMERGENCY_STOP_ENGAGED,
+    &emergency_stop_engaged_state_);
 
   return state_interfaces;
 }
@@ -1033,6 +1038,7 @@ TrossenArmHardwareInterface::on_cleanup(const rclcpp_lifecycle::State & /*previo
 {
   robot_output_ = trossen_arm::RobotOutput();
   emergency_stop_engaged_ = false;
+  emergency_stop_engaged_state_ = 0.0;
   arm_commands_suspended_after_emergency_stop_ = false;
   gripper_commands_suspended_after_emergency_stop_ = false;
   arm_driver_.reset();
@@ -1079,6 +1085,7 @@ TrossenArmHardwareInterface::on_error(const rclcpp_lifecycle::State & /*previous
   gripper_velocity_mode_running_ = false;
   gripper_external_effort_mode_running_ = false;
   emergency_stop_engaged_ = false;
+  emergency_stop_engaged_state_ = 0.0;
   arm_commands_suspended_after_emergency_stop_ = false;
   gripper_commands_suspended_after_emergency_stop_ = false;
   first_update_ = true;
@@ -1098,6 +1105,7 @@ TrossenArmHardwareInterface::engage_emergency_stop()
   arm_driver_->set_all_modes(trossen_arm::Mode::external_effort);
   arm_driver_->set_all_external_efforts(joint_external_effort_commands_, 0.0, false);
   emergency_stop_engaged_ = true;
+  emergency_stop_engaged_state_ = 1.0;
   arm_commands_suspended_after_emergency_stop_ = false;
   gripper_commands_suspended_after_emergency_stop_ = false;
 
@@ -1111,13 +1119,14 @@ return_type
 TrossenArmHardwareInterface::release_emergency_stop()
 {
   emergency_stop_engaged_ = false;
+  emergency_stop_engaged_state_ = 0.0;
   arm_commands_suspended_after_emergency_stop_ = true;
   gripper_commands_suspended_after_emergency_stop_ = true;
 
   RCLCPP_WARN(
     get_logger(),
     "Emergency stop released. Arm and gripper commands remain independently suspended until "
-    "their controllers are restarted.");
+    "their active command controllers are rearmed.");
   return return_type::OK;
 }
 

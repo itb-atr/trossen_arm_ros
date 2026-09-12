@@ -172,7 +172,13 @@ public:
   }
 
 private:
-  using ControllerStates = std::map<std::string, std::string>;
+  struct ControllerInfo
+  {
+    std::string state;
+    std::vector<std::string> claimed_interfaces;
+  };
+
+  using ControllerStates = std::map<std::string, ControllerInfo>;
 
   /**
    * @brief Normalize the configured controller_manager node name.
@@ -428,13 +434,13 @@ private:
 
     states.clear();
     for (const auto & controller : response->controller) {
-      states[controller.name] = controller.state;
+      states[controller.name] = ControllerInfo{controller.state, controller.claimed_interfaces};
     }
     return true;
   }
 
   /**
-   * @brief Activate controllers that are already loaded and configured.
+   * @brief Restore loaded controllers, restarting active command controllers when needed.
    */
   bool activate_existing_controllers(
     const std::vector<std::string> & controllers,
@@ -446,18 +452,23 @@ private:
     }
 
     std::vector<std::string> controllers_to_activate;
+    std::vector<std::string> controllers_to_deactivate;
     for (const auto & controller : controllers) {
       const auto state = states.find(controller);
       if (state == states.end()) {
         error_message = "Controller '" + controller + "' is not loaded.";
         return false;
       }
-      if (state->second == "active") {
+      if (state->second.state == "active") {
+        if (!state->second.claimed_interfaces.empty()) {
+          controllers_to_deactivate.push_back(controller);
+          controllers_to_activate.push_back(controller);
+        }
         continue;
       }
-      if (state->second != "inactive") {
+      if (state->second.state != "inactive") {
         error_message =
-          "Controller '" + controller + "' is in state '" + state->second +
+          "Controller '" + controller + "' is in state '" + state->second.state +
           "' instead of inactive.";
         return false;
       }
@@ -470,6 +481,7 @@ private:
 
     auto request = std::make_shared<controller_manager_msgs::srv::SwitchController::Request>();
     request->activate_controllers = controllers_to_activate;
+    request->deactivate_controllers = controllers_to_deactivate;
     request->strictness = controller_manager_msgs::srv::SwitchController::Request::STRICT;
     request->activate_asap = true;
     request->timeout = rclcpp::Duration::from_seconds(service_timeout_sec_);
@@ -564,14 +576,14 @@ private:
         error_message = "Controller '" + controller + "' is still unavailable after loading.";
         return false;
       }
-      if (state->second == "unconfigured") {
+      if (state->second.state == "unconfigured") {
         if (!configure_controller(controller, error_message)) {
           return false;
         }
-      } else if (state->second != "inactive" && state->second != "active") {
+      } else if (state->second.state != "inactive" && state->second.state != "active") {
         error_message =
           "Fallback controller '" + controller + "' is in unrecoverable state '" +
-          state->second + "'.";
+          state->second.state + "'.";
         return false;
       }
     }
@@ -596,7 +608,7 @@ private:
 
     std::vector<std::string> active_controllers;
     for (const auto & controller_state : states) {
-      if (controller_state.second == "active") {
+      if (controller_state.second.state == "active") {
         active_controllers.push_back(controller_state.first);
       }
     }
