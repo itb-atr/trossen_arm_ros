@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.20)
 project(trossen_arm_ros)
 find_package(ament_cmake REQUIRED)
 unset(CATKIN_INSTALL_INTO_PREFIX_ROOT)

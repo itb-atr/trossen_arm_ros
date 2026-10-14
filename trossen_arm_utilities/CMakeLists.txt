@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.20)
 project(trossen_arm_utilities)
 
 find_package(ament_cmake REQUIRED)
@@ -11,11 +11,11 @@ add_executable(trossen_arm_recovery_node
   src/trossen_arm_recovery_node.cpp
 )
 
-ament_target_dependencies(trossen_arm_recovery_node
-  controller_manager_msgs
-  lifecycle_msgs
-  rclcpp
-  std_srvs
+target_link_libraries(trossen_arm_recovery_node PUBLIC
+  ${controller_manager_msgs_TARGETS}
+  ${lifecycle_msgs_TARGETS}
+  ${std_srvs_TARGETS}
+  rclcpp::rclcpp
 )
 
 install(

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.20)
 project(trossen_arm_hardware)
 
 find_package(ament_cmake REQUIRED)
